@@ -1,8 +1,8 @@
-use soroban_sdk::{Env, Address, Vec, Map, Symbol, contracttype, symbol_short, Bytes};
 use crate::error::SettlementError;
+use crate::security::reentrancy_guard::ReentrancyGuard;
 use crate::types::{Asset, ExecutionResult};
 use crate::utils::asset_utils;
-use crate::security::reentrancy_guard::ReentrancyGuard;
+use soroban_sdk::{contracttype, symbol_short, Address, Bytes, Env, Map, Symbol, Vec};
 
 // Storage keys
 const ATOMIC_SWAPS: Symbol = symbol_short!("atom_swps");
@@ -58,7 +58,7 @@ impl AtomicSwapEngine {
         nft_address: &Address,
         token_id: u64,
         payment_asset: &Asset,
-        payment_amount: i128
+        payment_amount: i128,
     ) -> Result<u64, SettlementError> {
         let swap_id = Self::next_swap_id(env);
 
@@ -108,13 +108,19 @@ impl AtomicSwapEngine {
         depositor: &Address,
         asset: &Asset,
         amount: i128,
-        is_nft: bool
+        is_nft: bool,
     ) -> Result<(), SettlementError> {
         let mut swap = Self::get_swap_by_transaction(env, transaction_id)?;
 
         // Validate depositor
-        let is_seller_deposit = swap.seller_escrow.iter().any(|h| h.holder == *depositor && h.asset == *asset);
-        let is_buyer_deposit = swap.buyer_escrow.iter().any(|h| h.holder == *depositor && h.asset == *asset);
+        let is_seller_deposit = swap
+            .seller_escrow
+            .iter()
+            .any(|h| h.holder == *depositor && h.asset == *asset);
+        let is_buyer_deposit = swap
+            .buyer_escrow
+            .iter()
+            .any(|h| h.holder == *depositor && h.asset == *asset);
 
         if !is_seller_deposit && !is_buyer_deposit {
             return Err(SettlementError::Unauthorized);
@@ -137,7 +143,7 @@ impl AtomicSwapEngine {
     pub fn execute_swap(
         env: &Env,
         transaction_id: u64,
-        executor: &Address
+        executor: &Address,
     ) -> Result<ExecutionResult, SettlementError> {
         ReentrancyGuard::execute(env, executor, "execute_swap", || {
             let mut swap = Self::get_swap_by_transaction(env, transaction_id)?;
@@ -172,13 +178,13 @@ impl AtomicSwapEngine {
     pub fn cancel_swap(
         env: &Env,
         transaction_id: u64,
-        canceller: &Address
+        canceller: &Address,
     ) -> Result<(), SettlementError> {
         let mut swap = Self::get_swap_by_transaction(env, transaction_id)?;
 
         // Only seller or buyer can cancel
-        let is_authorized = swap.seller_escrow.iter().any(|h| h.holder == *canceller) ||
-                           swap.buyer_escrow.iter().any(|h| h.holder == *canceller);
+        let is_authorized = swap.seller_escrow.iter().any(|h| h.holder == *canceller)
+            || swap.buyer_escrow.iter().any(|h| h.holder == *canceller);
 
         if !is_authorized {
             return Err(SettlementError::Unauthorized);
@@ -198,7 +204,7 @@ impl AtomicSwapEngine {
         env: &Env,
         transaction_id: u64,
         admin: &Address,
-        reason: &Bytes
+        reason: &Bytes,
     ) -> Result<(), SettlementError> {
         // This would check admin permissions
         let swap = Self::get_swap_by_transaction(env, transaction_id)?;
@@ -226,7 +232,7 @@ impl AtomicSwapEngine {
         from: &Address,
         asset: &Asset,
         amount: i128,
-        is_nft: bool
+        is_nft: bool,
     ) -> Result<(), SettlementError> {
         if is_nft {
             // Transfer NFT to escrow contract
@@ -235,7 +241,7 @@ impl AtomicSwapEngine {
                 from,
                 &env.current_contract_address(),
                 amount as u64,
-                env
+                env,
             )?;
         } else {
             // Transfer tokens to escrow contract
@@ -244,7 +250,7 @@ impl AtomicSwapEngine {
                 from,
                 &env.current_contract_address(),
                 amount,
-                env
+                env,
             )?;
         }
         Ok(())
@@ -256,7 +262,7 @@ impl AtomicSwapEngine {
         to: &Address,
         asset: &Asset,
         amount: i128,
-        is_nft: bool
+        is_nft: bool,
     ) -> Result<(), SettlementError> {
         if is_nft {
             asset_utils::transfer_nft(
@@ -264,7 +270,7 @@ impl AtomicSwapEngine {
                 &env.current_contract_address(),
                 to,
                 amount as u64,
-                env
+                env,
             )?;
         } else {
             asset_utils::transfer_tokens(
@@ -272,7 +278,7 @@ impl AtomicSwapEngine {
                 &env.current_contract_address(),
                 to,
                 amount,
-                env
+                env,
             )?;
         }
         Ok(())
@@ -290,7 +296,7 @@ impl AtomicSwapEngine {
                         &buyer_holding.holder,
                         &holding.asset,
                         holding.amount,
-                        holding.is_nft
+                        holding.is_nft,
                     )?;
                 }
             }
@@ -306,7 +312,7 @@ impl AtomicSwapEngine {
                         &seller_holding.holder,
                         &holding.asset,
                         holding.amount,
-                        holding.is_nft
+                        holding.is_nft,
                     )?;
                 }
             }
@@ -324,7 +330,7 @@ impl AtomicSwapEngine {
                 &holding.holder,
                 &holding.asset,
                 holding.amount,
-                holding.is_nft
+                holding.is_nft,
             )?;
         }
 
@@ -335,7 +341,7 @@ impl AtomicSwapEngine {
                 &holding.holder,
                 &holding.asset,
                 holding.amount,
-                holding.is_nft
+                holding.is_nft,
             )?;
         }
 
@@ -349,7 +355,7 @@ impl AtomicSwapEngine {
         depositor: &Address,
         asset: &Asset,
         _amount: i128,
-        _is_nft: bool
+        _is_nft: bool,
     ) -> Result<(), SettlementError> {
         let timestamp = env.ledger().timestamp();
 
@@ -395,9 +401,15 @@ impl AtomicSwapEngine {
 
     /// Internal: Get next swap ID
     fn next_swap_id(env: &Env) -> u64 {
-        let current_id: u64 = env.storage().instance().get(&Symbol::new(env, "next_swap")).unwrap_or(1);
+        let current_id: u64 = env
+            .storage()
+            .instance()
+            .get(&Symbol::new(env, "next_swap"))
+            .unwrap_or(1);
         let next_id = current_id + 1;
-        env.storage().instance().set(&Symbol::new(env, "next_swap"), &next_id);
+        env.storage()
+            .instance()
+            .set(&Symbol::new(env, "next_swap"), &next_id);
         current_id
     }
 
@@ -415,7 +427,10 @@ impl AtomicSwapEngine {
     }
 
     /// Internal: Get swap by transaction ID
-    fn get_swap_by_transaction(env: &Env, transaction_id: u64) -> Result<AtomicSwap, SettlementError> {
+    fn get_swap_by_transaction(
+        env: &Env,
+        transaction_id: u64,
+    ) -> Result<AtomicSwap, SettlementError> {
         let swaps: Map<u64, AtomicSwap> = env
             .storage()
             .instance()
@@ -440,7 +455,7 @@ impl EscrowManager {
     pub fn check_escrow_balance(
         _env: &Env,
         _transaction_id: u64,
-        _asset: &Asset
+        _asset: &Asset,
     ) -> Result<i128, SettlementError> {
         // This would query the escrow holdings
         // For now, return a placeholder
@@ -453,10 +468,16 @@ impl EscrowManager {
         _transaction_id: u64,
         to: &Address,
         asset: &Asset,
-        amount: i128
+        amount: i128,
     ) -> Result<(), SettlementError> {
         // Transfer from escrow to recipient
-        asset_utils::transfer_tokens(&asset.contract, &env.current_contract_address(), to, amount, env)
+        asset_utils::transfer_tokens(
+            &asset.contract,
+            &env.current_contract_address(),
+            to,
+            amount,
+            env,
+        )
     }
 
     /// Get escrow holdings for a transaction
