@@ -17,7 +17,7 @@ import { AuctionStatus } from './interfaces/auction.interface';
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
 import type { Request as ExpressRequest } from 'express';
 
-@Controller('api/v1/auctions')
+@Controller('auctions')
 export class AuctionController {
   constructor(private readonly auctionService: AuctionService) {}
 
