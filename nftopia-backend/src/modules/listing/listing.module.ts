@@ -1,0 +1,19 @@
+import { Module } from '@nestjs/common';
+import { TypeOrmModule } from '@nestjs/typeorm';
+import { Listing } from './entities/listing.entity';
+import { ListingService } from './listing.service';
+import { ListingController } from './listing.controller';
+import { StellarNft } from '../../nft/entities/stellar-nft.entity';
+import { NftMetadata } from '../../nft/entities/nft-metadata.entity';
+import { StellarModule } from '../stellar/stellar.module';
+
+@Module({
+  imports: [
+    TypeOrmModule.forFeature([Listing, StellarNft, NftMetadata]),
+    StellarModule,
+  ],
+  providers: [ListingService],
+  controllers: [ListingController],
+  exports: [ListingService],
+})
+export class ListingModule {}

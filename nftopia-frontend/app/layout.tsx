@@ -1,5 +1,7 @@
 import { Inter } from "next/font/google";
 import "./globals.css";
+import ApolloWrapper from "@/lib/graphql/apollo-wrapper";
+import { AuthProvider } from "@/lib/context/AuthContext";
 
 const inter = Inter({
   subsets: ["latin"],
@@ -8,6 +10,7 @@ const inter = Inter({
 });
 
 export const metadata = {
+  metadataBase: new URL(process.env.NEXT_PUBLIC_BASE_URL || "http://localhost:3000"),
   title: 'NFTopia - NFT Marketplace',
   description: 'Discover, collect, and trade unique NFTs on the most innovative blockchain marketplace',
   manifest: '/manifest.json',
@@ -75,7 +78,11 @@ export default function RootLayout({
         <meta name="msapplication-TileImage" content="/nftopia-03.png" />
         <meta name="msapplication-config" content="/browserconfig.xml" />
       </head>
-      <body className={inter.className}>{children}</body>
+      <body className={inter.className}>
+        <AuthProvider>
+          <ApolloWrapper>{children}</ApolloWrapper>
+        </AuthProvider>
+      </body>
     </html>
   );
 }
