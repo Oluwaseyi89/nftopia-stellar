@@ -1,5 +1,7 @@
 import { Module } from '@nestjs/common';
+import { CacheModule } from '@nestjs/cache-manager';
 import { ConfigModule } from '@nestjs/config';
+import { ConfigService } from '@nestjs/config';
 import { JwtModule } from '@nestjs/jwt';
 import { PassportModule } from '@nestjs/passport';
 import { GraphQLSchemaBuilderModule } from '@nestjs/graphql';
@@ -28,6 +30,18 @@ const jwtAccessExpiresInSeconds = parseInt(
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
+    CacheModule.registerAsync({
+      isGlobal: true,
+      inject: [ConfigService],
+      useFactory: async (config: ConfigService) => ({
+        store: (await import('cache-manager-redis-store')).default,
+        host: config.get('REDIS_HOST') || 'localhost',
+        port: parseInt(config.get('REDIS_PORT') || '6379', 10),
+        password: config.get('REDIS_PASSWORD'),
+        db: parseInt(config.get('REDIS_DB') || '0', 10),
+        ttl: parseInt(config.get('CACHE_TTL') || '300', 10),
+      }),
+    }),
     PassportModule,
     GraphQLSchemaBuilderModule,
     EventEmitterModule.forRoot(),
