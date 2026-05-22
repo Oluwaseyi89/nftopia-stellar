@@ -1,41 +1,36 @@
-# Objective:
-Standardize and implement consistent pagination and filtering mechanisms in all data-heavy views.
+# Issue 46: Fix `hasNextPage` Always Returning False in `order.resolver.ts`
 
-## Background
-Currently, data-heavy views in the application (such as tables, lists, and grids) have inconsistent or missing pagination and filtering features. This can lead to poor user experience, slow performance, and difficulty in finding or managing large datasets. Ensuring all data-heavy views have robust, consistent pagination and filtering will improve usability, performance, and maintainability.
+## Summary
+GraphQL order pagination always reports `hasNextPage: false`, so clients stop fetching after the first page even when more orders exist.
 
-## Tasks
-1. **Audit Data-Heavy Views**
-   - Identify all views and components that display large datasets (tables, lists, grids, etc.).
-   - Document which views lack pagination or filtering, or use inconsistent implementations.
+## Problem Statement
+Confirmed in backend code:
+1. In `order.resolver.ts`, `toConnection()` hardcodes:
+   - `hasNextPage: false // TODO: implement real pagination`
+2. Resolver computes `totalCount` as `orders.length` (page size), not dataset total.
+3. `OrderService.findAll()` uses `skip/take` but only returns current page rows; it does not return total rows.
+4. Cursor handling is inconsistent: `after` is treated as numeric page (`Number(pagination.after)`), while emitted cursors are order IDs.
 
-2. **Design Standard Pagination and Filtering**
-   - Define standard UI patterns and APIs for pagination (e.g., page size, navigation controls, infinite scroll).
-   - Specify filtering options, UI controls, and query logic for common use cases.
-   - Ensure accessibility and responsiveness for all pagination and filtering controls.
-
-3. **Implement and Refactor**
-   - Create or update reusable Pagination and Filter components.
-   - Integrate these components into all relevant data-heavy views.
-   - Refactor existing implementations to use the standardized approach.
-
-4. **Testing & Validation**
-   - Test pagination and filtering with large datasets and edge cases (empty, single page, max pages, etc.).
-   - Validate accessibility, keyboard navigation, and responsiveness.
-   - Ensure performance is optimized for large data sets.
-
-5. **Documentation**
-   - Document component APIs, usage examples, and design guidelines for pagination and filtering.
-   - Provide a migration guide for updating or adding new data-heavy views.
+## Required Changes
+1. Add a paginated service method returning both rows and total count, e.g.:
+   - `findAllWithCount(query): { items, totalCount, page, limit }`
+   - Use TypeORM `getManyAndCount()`.
+2. Update `myOrders` and `userOrders` resolvers to call this paginated method.
+3. Compute `hasNextPage` using total count:
+   - `hasNextPage = page * limit < totalCount`.
+4. Return real `totalCount` from DB count, not `orders.length`.
+5. Align pagination contract:
+   - Either keep page-based pagination (`after` as page number) and emit numeric cursors,
+   - Or move to true cursor-based pagination and stop parsing cursor as page.
+6. Add validation/defaults for pagination inputs (`page >= 1`, sane `limit`).
 
 ## Acceptance Criteria
-- All data-heavy views have consistent, accessible pagination and filtering.
-- Users can easily navigate, search, and filter large datasets.
-- Performance is optimized and UI is responsive across devices.
-- Documentation is updated with guidelines and examples for pagination and filtering.
+1. For datasets larger than page size, first page returns `hasNextPage: true`.
+2. Last page returns `hasNextPage: false`.
+3. `totalCount` reflects full filtered dataset, not current page length.
+4. Pagination is deterministic and consistent with the cursor/page contract.
+5. Tests cover: single-page, multi-page, final-page edge case.
 
----
-
-## Directory to Work On:
-
-`nftopia-frontend`
+## Dependencies
+Depends On: Stable pagination input contract in GraphQL schema
+Blocks: Reliable infinite-scroll / load-more behavior in frontend order history views
