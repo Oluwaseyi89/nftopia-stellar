@@ -21,44 +21,7 @@
 
 7. **Calibrate gas/fee limits for mainnet** — All fee estimates in `gas_optimizer.rs` are based on testnet conditions and must be remeasured against real mainnet ledger fee ladder and resource limits.
 
-8. **Harden cross-contract call authorization** — Contracts that call each other (e.g., marketplace_settlement calling nft_contract) do not enforce strict caller authorization checks, risking unauthorized invocations.
 
-### Issue 8 Detailed Breakdown
-
-**Severity:** Critical (mainnet blocker)  
-**Area:** `nftopia-stellar/contracts/marketplace_settlement`
-
-**Problem Statement:**
-Cross-contract interaction paths are not enforcing strict actor authentication and trusted-target validation before performing sensitive state changes or token/NFT transfers. This creates a risk that a caller can pass spoofed addresses in function parameters and trigger unauthorized execution paths.
-
-**Verified risk signals in current contract code:**
-1. Public entry points accept actor addresses (`seller`, `buyer`, `bidder`, `admin`) but do not consistently bind them to signer auth checks.
-2. Cross-contract helper methods in `src/utils/asset_utils.rs` still include placeholder behavior (`is_valid_token_contract` always true, `check_nft_ownership` returning success placeholders, transfer helpers returning success stubs).
-3. There is no strict allowlist gate for external token/NFT contract addresses before invoking them.
-
-**Required Implementation:**
-1. Add `require_auth()` checks on all actor-bearing public entry points in `settlement_core.rs`.
-2. Replace placeholder cross-contract helper implementations with real Soroban interface invocations and explicit error propagation.
-3. Introduce persistent allowlists for approved NFT contracts and approved payment token contracts.
-4. Reject unallowlisted targets before call execution with deterministic error codes.
-5. Add admin-only allowlist management methods (add/remove/list) with auth checks.
-6. Add actor-consistency checks for transitions (e.g., sale execution, cancellation, disputes, fee withdrawals).
-7. Emit authorization failure events for incident tracing and forensic analysis.
-
-**Acceptance Criteria:**
-1. A caller cannot execute an action on behalf of another wallet by passing a forged actor parameter.
-2. Unauthorized admin operations fail with `SettlementError::Unauthorized`.
-3. Calls to unknown token/NFT contracts are rejected before invocation.
-4. Placeholder `Ok(())` cross-contract paths are fully removed from production logic.
-5. Unit tests include spoofed actor and unallowlisted contract attempts.
-6. Integration tests cover end-to-end authorized sale/auction flows.
-7. All changes pass `cargo test` with no regressions in settlement flows.
-
-**Dependencies / Impact:**
-- Depends on: Issue 2 (asset validation), Issue 3 (mainnet contract address configuration)
-- Blocks: Issue 9 (bid refund correctness), Issue 31 (event integrity), backend settlement trust assumptions
-
-9. **Implement bid refund logic in `auction_engine.rs` on cancellation** — When an auction is cancelled or expires without a winner, the losing bidder funds are not provably returned through the contract logic.
 
 10. **Replace placeholder arbitration in `dispute_resolution.rs`** — The dispute module has no integration with an arbitration oracle or trusted third party; resolution logic is a stub that needs a real decision mechanism.
 
@@ -88,15 +51,12 @@ Cross-contract interaction paths are not enforcing strict actor authentication a
 
 23. **Create integration test suite running against mainnet fork or futurenet** — All existing tests use unit mocks; no integration tests exercise the full call stack against a live-like Soroban environment.
 
-24. **Restrict NFT metadata update to owner only in `nft_contract`** — Metadata update logic must validate the caller is the current token owner, preventing unauthorized attribute changes.
+
 
 25. **Add edge case tests for zero-amount and dust bids** — No tests cover bids with zero or near-zero amounts, which could be exploited to grief auctions or disrupt settlement logic.
 
 26. **Enforce maximum supply cap in `nft_contract`** — There is no hard supply ceiling enforceable at the contract level for a given collection, allowing unlimited minting beyond intended supply.
 
-27. **Add re-entrancy guard to `settlement_core.rs`** — Soroban's execution model reduces re-entrancy risk but an explicit guard should be added given the contract handles value transfers.
-
-28. **Implement contract-level rate limiting on high-frequency entry points** — Entry points such as bid placement have no on-chain throttle, allowing a single account to flood the contract with calls.
 
 29. **Adopt Soroban contract versioning in WASM metadata** — Contracts do not embed a version identifier in their WASM, making it impossible to distinguish deployed versions during incident response.
 
@@ -126,17 +86,9 @@ Cross-contract interaction paths are not enforcing strict actor authentication a
 
 ## Backend Issues (55)
 
-41. **Implement event fetching in `contract-event-indexer.job.ts`** — The scheduled job that should fetch Soroban contract events since the last indexed ledger contains only a TODO comment and a dummy `await`, meaning zero events are indexed.
-
-42. **Implement event persistence in `contract-event-indexer.job.ts`** — The second of three TODO stubs: events fetched from the contract are never saved to the database, breaking all event-driven features.
-
-43. **Implement `lastIndexedLedger` update in `contract-event-indexer.job.ts`** — Without updating the cursor after each run, the indexer will re-process all events from ledger 0 on every cron tick once the fetch stub is filled.
 
 44. **Map bundle order to real contract call in `order.service.ts`** — Purchase-type orders return `{ success: true, contractId: -1 }` as a hardcoded placeholder instead of invoking the actual contract.
 
-45. **Replace placeholder analytics in `order.service.ts`** — The `getSalesAnalytics()` method has a comment "TODO: Implement real analytics logic" and returns empty/stub data used by the admin dashboard.
-
-46. **Fix `hasNextPage` always returning false in `order.resolver.ts`** — GraphQL pagination for orders never signals that more pages exist, causing clients to stop fetching after the first page regardless of dataset size.
 
 47. **Implement real admin authorization check in `order.resolver.ts`** — Admin-restricted resolvers contain a TODO comment deferring the real user-role lookup, leaving admin routes effectively unprotected.
 
@@ -160,11 +112,6 @@ Cross-contract interaction paths are not enforcing strict actor authentication a
 
 57. **Configure Redis AUTH password for production** — The Redis connection configuration does not enforce a password, leaving the cache open to anyone on the same network segment.
 
-58. **Set database connection pool size for production load** — TypeORM is initialized without explicit `extra.max` pool size, defaulting to 10 connections and risking pool exhaustion under moderate traffic.
-
-59. **Replace generic `Error` throws in `ipfs.service.ts` with `HttpException`** — All IPFS upload failures throw `new Error(string)`, bypassing NestJS exception handling and returning 500 errors with raw messages to clients.
-
-60. **Replace generic `Error` throws in `arweave.service.ts` with `HttpException`** — Same issue as IPFS service; plain `Error` throws expose internal error messages in API responses.
 
 61. **Add retry mechanism with exponential backoff for Soroban RPC calls** — No retry logic exists for transient RPC failures; a failed contract call raises an exception immediately with no recovery attempt.
 
@@ -182,7 +129,6 @@ Cross-contract interaction paths are not enforcing strict actor authentication a
 
 68. **Implement API versioning strategy (URL prefix or header)** — No versioning mechanism exists, making breaking changes to existing clients inevitable during iteration; `/api/v1/` prefix should be established.
 
-69. **Add WebSocket message size limits to the notifications gateway** — Unbounded WebSocket message sizes allow resource exhaustion attacks against the notification gateway.
 
 70. **Enforce file upload size limits at the gateway level** — The storage/upload endpoints do not enforce a maximum file size in the NestJS interceptor, risking OOM from large file uploads.
 
@@ -190,7 +136,7 @@ Cross-contract interaction paths are not enforcing strict actor authentication a
 
 72. **Implement queue-based retry for blockchain transaction submissions** — Failed on-chain submissions are not retried via a durable queue; transient network issues cause permanent failures from the user's perspective.
 
-73. **Add dead-letter queue for failed contract event processing** — Events that fail to process are silently dropped with an error log and never retried or flagged for manual review.
+
 
 74. **Add heartbeat and reconnect logic to the notifications gateway** — The WebSocket gateway does not handle stale connections; clients that lose connectivity are never cleaned up from server-side subscriptions.
 
