@@ -6,7 +6,7 @@ import {
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { User } from '../users/user.entity';
-import { Collection } from '../collections/collection.entity';
+import { Collection } from '../modules/collection/entities/collection.entity';
 
 @Injectable()
 export class AdminService {

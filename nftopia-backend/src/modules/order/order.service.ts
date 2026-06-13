@@ -9,6 +9,7 @@ import { In, Repository } from 'typeorm';
 import { Order } from './entities/order.entity';
 import { CreateOrderDto, OrderStatus, OrderType } from './dto/create-order.dto';
 import { OrderQueryDto } from './dto/order-query.dto';
+import { OrderPaginatedResponseDto } from './dto/order-paginated-response.dto';
 import { OrderInterface, OrderStats } from './interfaces/order.interface';
 import { ConfigService } from '@nestjs/config';
 import { MarketplaceSettlementClient } from '../stellar/marketplace-settlement.client';
@@ -82,6 +83,77 @@ export class OrderService {
     return orders.map(this.toOrderInterface);
   }
 
+  /**
+   * Find all orders with pagination and total count.
+   * Validates pagination inputs and applies sensible defaults.
+   *
+   * @param query - OrderQueryDto with optional pagination (page, limit)
+   * @returns OrderPaginatedResponseDto with items, totalCount, page, limit, and hasNextPage
+   */
+  async findAllWithCount(
+    query: OrderQueryDto,
+  ): Promise<OrderPaginatedResponseDto> {
+    // Validate and set defaults for pagination
+    let page = query.page || 1;
+    let limit = query.limit || 20;
+
+    // Ensure page >= 1
+    if (page < 1) {
+      page = 1;
+    }
+
+    // Enforce sane limits (min: 1, max: 100)
+    if (limit < 1) {
+      limit = 20;
+    } else if (limit > 100) {
+      limit = 100;
+    }
+
+    const qb = this.orderRepository.createQueryBuilder('order');
+
+    // Apply filters
+    if (query.nftId)
+      qb.andWhere('order.nftId = :nftId', { nftId: query.nftId });
+    if (query.buyerId)
+      qb.andWhere('order.buyerId = :buyerId', { buyerId: query.buyerId });
+    if (query.sellerId)
+      qb.andWhere('order.sellerId = :sellerId', { sellerId: query.sellerId });
+    if (query.type) qb.andWhere('order.type = :type', { type: query.type });
+    if (query.status)
+      qb.andWhere('order.status = :status', { status: query.status });
+    if (query.fromDate)
+      qb.andWhere('order.createdAt >= :fromDate', { fromDate: query.fromDate });
+    if (query.toDate)
+      qb.andWhere('order.createdAt <= :toDate', { toDate: query.toDate });
+
+    // Apply sorting (default by createdAt DESC)
+    if (query.sortBy) {
+      qb.orderBy(
+        `order.${query.sortBy}`,
+        query.sortOrder === 'DESC' ? 'DESC' : 'ASC',
+      );
+    } else {
+      qb.orderBy('order.createdAt', 'DESC');
+    }
+
+    // Apply pagination
+    qb.skip((page - 1) * limit).take(limit);
+
+    // Get both data and count using getManyAndCount
+    const [orders, totalCount] = await qb.getManyAndCount();
+
+    // Calculate hasNextPage
+    const hasNextPage = page * limit < totalCount;
+
+    return {
+      items: orders.map(this.toOrderInterface),
+      totalCount,
+      page,
+      limit,
+      hasNextPage,
+    };
+  }
+
   async findOne(id: string): Promise<OrderInterface> {
     const order = await this.orderRepository.findOne({ where: { id } });
     if (!order) throw new NotFoundException('Order not found');
@@ -108,7 +180,7 @@ export class OrderService {
     if (!Object.values(OrderStatus).includes(status as OrderStatus)) {
       throw new BadRequestException('Invalid status');
     }
-    order.status = status as OrderStatus;
+    order.status = status;
     const saved = await this.orderRepository.save(order);
     return this.toOrderInterface(saved);
   }
@@ -137,13 +209,36 @@ export class OrderService {
     };
   }
 
-  // Placeholder for sales analytics
-  getSalesAnalytics() {
-    // TODO: Implement real analytics logic
+  async getSalesAnalytics(
+    periodStart: Date,
+    periodEnd: Date,
+  ): Promise<{
+    volume: string;
+    count: number;
+    averagePrice: string;
+  }> {
+    const qb = this.orderRepository
+      .createQueryBuilder('order')
+      .select('SUM(order.price)', 'volume')
+      .addSelect('COUNT(order.id)', 'count')
+      .addSelect('AVG(order.price)', 'averagePrice')
+      .where('order.type = :type', { type: OrderType.SALE })
+      .andWhere('order.status = :status', { status: OrderStatus.COMPLETED })
+      .andWhere('order.createdAt BETWEEN :periodStart AND :periodEnd', {
+        periodStart,
+        periodEnd,
+      });
+
+    const stats = ((await qb.getRawOne()) as {
+      volume: string | null;
+      count: string | null;
+      averagePrice: string | null;
+    }) || { volume: '0', count: '0', averagePrice: '0' };
+
     return {
-      volume: '0',
-      count: 0,
-      averagePrice: '0',
+      volume: stats.volume ?? '0',
+      count: Number(stats.count ?? 0),
+      averagePrice: stats.averagePrice ?? '0',
     };
   }
 }

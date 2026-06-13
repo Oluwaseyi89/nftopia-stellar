@@ -4,6 +4,7 @@ import { Repository } from 'typeorm';
 import { Horizon } from 'stellar-sdk';
 import { SystemSettings } from './system-settings.entity';
 import { StellarNft } from '../nft/entities/stellar-nft.entity';
+import { ContractEventDlq } from './entities/contract-event-dlq.entity';
 
 const LAST_LEDGER_KEY = 'last_ingested_ledger';
 const HORIZON_URL =
@@ -21,6 +22,8 @@ export class IndexerService implements OnModuleInit {
     private readonly settingsRepo: Repository<SystemSettings>,
     @InjectRepository(StellarNft)
     private readonly nftRepo: Repository<StellarNft>,
+    @InjectRepository(ContractEventDlq)
+    private readonly dlqRepo: Repository<ContractEventDlq>,
   ) {}
 
   onModuleInit() {
@@ -94,7 +97,7 @@ export class IndexerService implements OnModuleInit {
     await this.sleep(6000); // ~1 ledger interval
   }
 
-  private async processTransaction(
+  public async processTransaction(
     tx: Horizon.ServerApi.TransactionRecord,
     contractId: string,
   ): Promise<void> {
@@ -107,16 +110,45 @@ export class IndexerService implements OnModuleInit {
       `Processing ${eventType} event from contract ${contractId}`,
     );
 
-    switch (eventType) {
-      case 'mint':
-        await this.handleMint(tx, contractId);
-        break;
-      case 'sale':
-        await this.handleSale(tx, contractId);
-        break;
-      case 'transfer':
-        await this.handleTransfer(tx, contractId);
-        break;
+    try {
+      switch (eventType) {
+        case 'mint':
+          await this.handleMint(tx, contractId);
+          break;
+        case 'sale':
+          await this.handleSale(tx, contractId);
+          break;
+        case 'transfer':
+          await this.handleTransfer(tx, contractId);
+          break;
+      }
+    } catch (err) {
+      this.logger.error(`Failed to process ${eventType} event: ${String(err)}`);
+      try {
+        const dlqEntity = this.dlqRepo.create({
+          contractId,
+          ledger: tx.ledger_attr ?? 0,
+          txHash: tx.hash,
+          eventIndex: 0, // Not explicitly available, default to 0
+          eventType,
+          payload: tx as unknown as Record<string, unknown>,
+          errorMessage: err instanceof Error ? err.message : String(err),
+          stack: err instanceof Error ? err.stack : undefined,
+          firstFailedAt: new Date(),
+          lastFailedAt: new Date(),
+          nextRetryAt: new Date(Date.now() + 60 * 1000), // Retry in 1 minute
+          status: 'pending',
+          attemptCount: 1,
+        });
+        await this.dlqRepo.save(dlqEntity);
+        this.logger.log(
+          `dlqEnqueued: 1 for txHash=${tx.hash} contract=${contractId}`,
+        );
+      } catch (dlqErr) {
+        this.logger.error(
+          `Failed to save to DLQ for txHash=${tx.hash}: ${String(dlqErr)}`,
+        );
+      }
     }
   }
 

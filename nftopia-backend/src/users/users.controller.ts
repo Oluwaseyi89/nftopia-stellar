@@ -35,6 +35,25 @@ export class UsersController {
     return this.usersService.listWallets(req.user.userId);
   }
 
+  @UseGuards(JwtAuthGuard)
+  @Get('me/earnings')
+  async getMyEarnings(@Req() req: RequestWithUser) {
+    if (!req.user?.userId) {
+      throw new UnauthorizedException('Invalid JWT payload');
+    }
+    const volume = await this.usersService.getUserTransactionVolume(
+      req.user.userId,
+    );
+    return {
+      data: {
+        success: true,
+        data: {
+          earnings: volume,
+        },
+      },
+    };
+  }
+
   @Get(':address')
   getPublicProfile(@Param('address') address: string) {
     return this.usersService.findByAddress(address);

@@ -1,11 +1,19 @@
 // Auth Store Types
 export interface User {
-  sub: string;
+  id?: string;
+  sub?: string;
+  address?: string;
   walletAddress: string;
+  walletProvider?: string;
   isArtist?: boolean;
   username?: string;
   email?: string;
   profileImage?: string;
+  avatarUrl?: string;
+  bannerUrl?: string;
+  twitterHandle?: string;
+  instagramHandle?: string;
+  website?: string;
   bio?: string;
   createdAt?: string;
   updatedAt?: string;
@@ -23,12 +31,10 @@ export interface AuthActions {
   setLoading: (loading: boolean) => void;
   setError: (error: string | null) => void;
   requestNonce: (walletAddress: string) => Promise<string>;
-  verifySignature: (walletAddress: string, signature: string) => Promise<void>;
+  verifySignature: (walletAddress: string, signature: [string, string]) => Promise<void>;
   logout: () => Promise<void>;
   clearError: () => void;
 }
-
-// export type AuthStore = AuthState & AuthActions;
 
 export type AuthStore = {
   user: User | null;
@@ -37,20 +43,40 @@ export type AuthStore = {
   error: string | null;
   accessToken: string | null;
   refreshTokenValue: string | null;
+
+  // Setters
   setUser: (user: User | null) => void;
   setLoading: (loading: boolean) => void;
   setError: (error: string | null) => void;
   clearError: () => void;
+
+  // Email auth
+  register: (email: string, password: string, username?: string) => Promise<void>;
+  emailLogin: (email: string, password: string) => Promise<void>;
+
+  // Wallet auth
+  getWalletChallenge: (walletAddress: string, walletProvider?: string) => Promise<unknown>;
+  verifyWalletSignature: (walletAddress: string, nonce: string, signature: string, walletProvider?: string) => Promise<void>;
+  linkWallet: (walletAddress: string, nonce: string, signature: string, walletProvider?: string) => Promise<unknown>;
+  unlinkWallet: (walletAddress: string) => Promise<unknown>;
+  listWallets: () => Promise<unknown>;
+
+  // Legacy Starknet methods (kept for backward compat)
   requestNonce: (walletAddress: string) => Promise<string>;
   verifySignature: (
     walletAddress: string,
-    signature: [string, string], // Changed from string to [string, string]
+    signature: [string, string],
     nonce: string,
-    walletType: 'argentx' | 'braavos',
+    walletProvider: 'freighter' | 'albedo' | 'walletconnect',
     locale: string
   ) => Promise<void>;
-  logout: () => Promise<void>;
+
+  // Token / session
   refreshToken: () => Promise<string>;
+  isAccessTokenExpired: () => boolean;
+  getCurrentUser: () => User | null;
+
+  logout: () => Promise<void>;
 };
 
 // Collection Store Types
@@ -122,37 +148,24 @@ export interface CollectionState {
 }
 
 export interface CollectionActions {
-  // Collection actions
   setCollections: (collections: Collection[]) => void;
   addCollection: (collection: Collection) => void;
   updateCollection: (id: string | number, updates: Partial<Collection>) => void;
   removeCollection: (id: string | number) => void;
   setCurrentCollection: (collection: Collection | null) => void;
-  
-  // User collections
   setUserCollections: (collections: Collection[]) => void;
-  
-  // NFT actions
   setNFTs: (nfts: NFT[]) => void;
   addNFT: (nft: NFT) => void;
   updateNFT: (id: string, updates: Partial<NFT>) => void;
   removeNFT: (id: string) => void;
   setUserNFTs: (nfts: NFT[]) => void;
-  
-  // Loading states
   setLoading: (key: keyof CollectionState['loading'], loading: boolean) => void;
-  
-  // Error handling
   setError: (error: string | null) => void;
   clearError: () => void;
-  
-  // Pagination
   setPagination: (
     type: 'collections' | 'nfts',
     pagination: Partial<CollectionState['pagination']['collections'] | CollectionState['pagination']['nfts']>
   ) => void;
-  
-  // API actions
   fetchCollections: () => Promise<void>;
   fetchUserCollections: () => Promise<void>;
   fetchNFTs: (collectionId?: string) => Promise<void>;
@@ -163,7 +176,6 @@ export interface CollectionActions {
 
 export type CollectionStore = CollectionState & CollectionActions;
 
-// User Preferences Store Types
 export interface Theme {
   mode: 'light' | 'dark' | 'system';
   primaryColor: string;
@@ -218,7 +230,6 @@ export interface PreferencesActions {
 
 export type PreferencesStore = PreferencesState & PreferencesActions;
 
-// App Store Types (Global UI state)
 export interface AppState {
   isOnline: boolean;
   sidebarOpen: boolean;
@@ -251,10 +262,9 @@ export interface AppActions {
 
 export type AppStore = AppState & AppActions;
 
-// Combined store type for DevTools
 export interface RootStore {
   auth: AuthStore;
   collections: CollectionStore;
   preferences: PreferencesStore;
   app: AppStore;
-} 
+}

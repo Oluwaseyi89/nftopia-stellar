@@ -6,9 +6,12 @@ import { WalletInfo, WalletProvider } from "@/types/stellar";
 import { useStellarWallet } from "./hooks/useStellarWallet";
 import { detectInstalledWallets } from "@/lib/stellar/wallet/detection";
 import { useTranslation } from "@/hooks/useTranslation";
-import Image from "next/image";
+import { OptimizedImage } from "@/components/image";
 import { useToast } from "@/lib/stores";
 import { Button } from "@/components/ui/button";
+import { telemetry } from "@/lib/telemetry";
+import { EVENT_NAMES } from "@/lib/telemetry/events";
+import { v4 as uuidv4 } from "uuid";
 
 interface WalletModalProps {
   open: boolean;
@@ -26,9 +29,13 @@ export function WalletModal({ open, onClose, onConnected }: WalletModalProps) {
   const [lastError, setLastError] = useState<string | null>(null);
   const modalRef = useRef<HTMLDivElement>(null);
   const firstFocusableRef = useRef<HTMLButtonElement>(null);
+  const lastFocusedElementRef = useRef<HTMLElement | null>(null);
+  const [attemptId, setAttemptId] = useState<string | null>(null);
+  const [triggerSource, setTriggerSource] = useState<"header_button" | "cta" | "forced_prompt" | "other">("other");
 
   useEffect(() => {
     if (open) {
+      lastFocusedElementRef.current = document.activeElement as HTMLElement;
       detectInstalledWallets().then(setWallets);
       setIsVisible(true);
       // Prevent background scrolling
@@ -36,6 +43,8 @@ export function WalletModal({ open, onClose, onConnected }: WalletModalProps) {
     } else {
       setIsVisible(false);
       document.body.style.overflow = '';
+      // Restore focus to the last focused element
+      lastFocusedElementRef.current?.focus();
     }
     
     return () => {
@@ -50,12 +59,30 @@ export function WalletModal({ open, onClose, onConnected }: WalletModalProps) {
     }
   }, [connected, address, open, onConnected, onClose]);
 
+  // Emit modal opened event
+  useEffect(() => {
+    if (open) {
+      telemetry.track(EVENT_NAMES.walletConnectModalOpened, {
+        surface: "modal",
+        trigger_source: triggerSource,
+      });
+    }
+  }, [open, triggerSource]);
+
+  // Emit modal closed event
+  const handleClose = useCallback((reason: "backdrop_click" | "escape_key" | "close_button" | "connect_success" | "route_change" = "close_button") => {
+    telemetry.track(EVENT_NAMES.walletConnectModalClosed, {
+      close_reason: reason,
+    });
+    onClose();
+  }, [onClose]);
+
   // Handle ESC key press
   const handleKeyDown = useCallback((e: KeyboardEvent) => {
     if (e.key === 'Escape' && open) {
-      onClose();
+      handleClose("escape_key");
     }
-  }, [open, onClose]);
+  }, [open, handleClose]);
 
   useEffect(() => {
     if (open) {
@@ -106,9 +133,27 @@ export function WalletModal({ open, onClose, onConnected }: WalletModalProps) {
     }
   }, []);
 
+  // Provider selection
+  const handleProviderSelect = (provider: WalletProvider, available: boolean) => {
+    setSelectedProvider(provider);
+    clearError();
+    telemetry.track(EVENT_NAMES.walletConnectProviderSelected, {
+      provider: provider ?? "unknown",
+      provider_available: !!available,
+    });
+  };
+
+  // Connect submit
   const handleConnect = async (provider: WalletProvider) => {
     setSelectedProvider(provider);
     clearError();
+    const newAttemptId = uuidv4();
+    setAttemptId(newAttemptId);
+    telemetry.track(EVENT_NAMES.walletConnectSubmitted, {
+      provider: provider ?? "unknown",
+      surface: "modal",
+      attempt_id: newAttemptId,
+    });
     await connect(provider);
   };
 
@@ -122,7 +167,7 @@ export function WalletModal({ open, onClose, onConnected }: WalletModalProps) {
       {/* Backdrop */}
       <div
         className="absolute inset-0 bg-black/60 backdrop-blur-sm"
-        onClick={onClose}
+        onClick={() => handleClose("backdrop_click")}
         aria-hidden="true"
       />
 
@@ -149,7 +194,7 @@ export function WalletModal({ open, onClose, onConnected }: WalletModalProps) {
             ref={firstFocusableRef}
             variant="ghost"
             size="icon"
-            onClick={onClose}
+            onClick={() => handleClose("close_button")}
             aria-label="Close wallet modal"
             className="text-gray-400 hover:text-white min-h-0 h-9 w-9 rounded-lg hover:bg-white/5"
           >
@@ -177,7 +222,10 @@ export function WalletModal({ open, onClose, onConnected }: WalletModalProps) {
                 key={wallet.id}
                 wallet={wallet}
                 isConnecting={connecting && selectedProvider === wallet.id}
-                onConnect={handleConnect}
+                onConnect={() => {
+                  handleProviderSelect(wallet.id, wallet.available);
+                  handleConnect(wallet.id);
+                }}
               />
             ))}
           </div>
@@ -220,15 +268,13 @@ function WalletOption({
       className="w-full justify-start gap-4 p-4 rounded-xl border-purple-500/15 hover:border-purple-500/40 hover:bg-purple-500/5 min-h-0 h-auto group"
     >
       <div className="w-10 h-10 rounded-xl bg-gray-800 flex items-center justify-center flex-shrink-0 overflow-hidden">
-        <Image
+        <OptimizedImage
           src={wallet.logo}
           alt={wallet.name}
           width={32}
           height={32}
           className="object-contain"
-          onError={(e: React.SyntheticEvent<HTMLImageElement>) => {
-            (e.target as HTMLImageElement).style.display = "none";
-          }}
+          fallbackSrc="/images/fallbacks/avatar-fallback.svg"
         />
       </div>
 

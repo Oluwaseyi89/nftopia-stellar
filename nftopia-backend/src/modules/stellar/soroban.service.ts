@@ -239,6 +239,10 @@ export class SorobanService {
     }
   }
 
+  getRpcServer(): SorobanServer {
+    return this.createRpcServer();
+  }
+
   private createRpcServer(): SorobanServer {
     const rpcUrl =
       this.configService.get<string>('SOROBAN_RPC_URL') ||
@@ -304,7 +308,7 @@ export class SorobanService {
       return nativeToScVal(Buffer.from(String(arg.value)), { type: 'bytes' });
     }
 
-    return nativeToScVal(arg.value as never);
+    return nativeToScVal(arg.value);
   }
 
   private extractSimulationReturnValue(simulationResult: unknown): unknown {

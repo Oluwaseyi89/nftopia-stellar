@@ -21,11 +21,12 @@ function makeCollection(overrides: Partial<Collection> = {}): Collection {
     totalSupply: 12,
     floorPrice: '1.2500000',
     totalVolume: '25.5000000',
+    isHidden: false,
     isVerified: false,
     createdAt: new Date('2026-03-24T10:00:00.000Z'),
     updatedAt: new Date('2026-03-24T10:00:00.000Z'),
     ...overrides,
-  } as Collection;
+  };
 }
 
 describe('CollectionService', () => {
