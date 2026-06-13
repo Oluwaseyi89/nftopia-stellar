@@ -66,26 +66,12 @@
 ## Backend Issues (55)
 
 
-44. **Map bundle order to real contract call in `order.service.ts`** — Purchase-type orders return `{ success: true, contractId: -1 }` as a hardcoded placeholder instead of invoking the actual contract.
-
-
-47. **Implement real admin authorization check in `order.resolver.ts`** — Admin-restricted resolvers contain a TODO comment deferring the real user-role lookup, leaving admin routes effectively unprotected.
-
-48. **Replace generic `Error` throws with domain exceptions in `marketplace-settlement.client.ts`** — All error branches throw `new Error(string)` instead of typed NestJS `HttpException` subclasses, losing HTTP status codes in responses.
-
-49. **Implement `paymentMethod` field in `buy-nft.dto.ts`** — The field is annotated as "placeholder for future payment details" and is never validated or used in order processing.
-
-50. **Add production Dockerfile for the NestJS backend** — No Dockerfile exists in the repository, blocking containerized deployment to any cloud provider.
-
-51. **Add production `docker-compose` configuration** — The existing `docker-compose.yml` is development-only; a production variant with secrets management, health checks, and resource limits is absent.
 
 52. **Create CI/CD pipeline configuration (GitHub Actions/GitLab CI)** — No pipeline definition exists for automated lint, test, build, and deploy on merge to main, creating a manual deployment risk.
 
 53. **Add Kubernetes deployment manifests for backend** — No Helm chart or raw YAML manifests exist for production Kubernetes deployment with replica sets, HPA, and pod disruption budgets.
 
 54. **Configure Kubernetes liveness and readiness probes** — The NestJS app has no `/health/live` and `/health/ready` endpoints wired to Kubernetes probe configuration.
-
-55. **Add global rate limiting on REST and GraphQL endpoints** — No `@nestjs/throttler` or equivalent is applied at the application level, leaving all endpoints vulnerable to abuse and DoS.
 
 56. **Enforce non-default `JWT_SECRET` in production startup validation** — The app will start with a weak or default JWT secret without validation; startup must assert the secret meets minimum entropy requirements.
 
@@ -98,32 +84,11 @@
 
 63. **Configure `STELLAR_HORIZON_URL` to mainnet endpoint** — The Horizon URL is pulled from environment config but no startup assertion validates it points to mainnet rather than testnet.
 
-64. **Integrate Prometheus metrics or OpenTelemetry for observability** — No metrics collection exists; without request rates, error rates, and latency histograms, SLO monitoring is impossible in production.
 
 65. **Configure structured JSON logging for production log aggregation** — The app uses NestJS default logger which outputs plain text; a JSON log format is required for centralized log aggregation (Datadog, Loki, etc.).
 
-66. **Add migration locking to prevent concurrent schema changes** — Database migrations can run concurrently on multi-instance startup without a distributed lock, risking schema corruption.
-
-67. **Define production CORS allowlist restricting to known domains** — The `cors.json` configuration in the frontend references origins, but the NestJS backend CORS policy must be locked to production domains only.
-
-68. **Implement API versioning strategy (URL prefix or header)** — No versioning mechanism exists, making breaking changes to existing clients inevitable during iteration; `/api/v1/` prefix should be established.
-
-
-70. **Enforce file upload size limits at the gateway level** — The storage/upload endpoints do not enforce a maximum file size in the NestJS interceptor, risking OOM from large file uploads.
-
-71. **Implement audit logging for sensitive admin operations** — Admin actions (user bans, manual order cancellation, fee changes) are not audit-logged, creating a compliance gap.
-
-72. **Implement queue-based retry for blockchain transaction submissions** — Failed on-chain submissions are not retried via a durable queue; transient network issues cause permanent failures from the user's perspective.
-
-
-
-74. **Add heartbeat and reconnect logic to the notifications gateway** — The WebSocket gateway does not handle stale connections; clients that lose connectivity are never cleaned up from server-side subscriptions.
 
 75. **Implement transactional email service (SMTP or provider)** — No email service is wired up; registration confirmation, password reset, and bid notification emails are entirely absent.
-
-76. **Implement password reset flow** — There is no endpoint or token-based mechanism for users to reset forgotten passwords, blocking account recovery.
-
-77. **Add two-factor authentication (2FA) support** — Platform manages financial assets but has no 2FA option, making accounts vulnerable to credential compromise.
 
 78. **Implement GDPR data export and account deletion** — No personal data export or right-to-erasure endpoint exists, creating legal liability in GDPR-applicable markets.
 
