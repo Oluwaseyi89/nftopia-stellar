@@ -19,29 +19,8 @@
 
 6. **Commission and complete a formal security audit** — None of the four Soroban contracts have undergone a documented third-party security audit before handling real user funds on mainnet.
 
-7. **Calibrate gas/fee limits for mainnet** — All fee estimates in `gas_optimizer.rs` are based on testnet conditions and must be remeasured against real mainnet ledger fee ladder and resource limits.
-
-
-
-10. **Replace placeholder arbitration in `dispute_resolution.rs`** — The dispute module has no integration with an arbitration oracle or trusted third party; resolution logic is a stub that needs a real decision mechanism.
-
-11. **Make fee parameters configurable in `fee_manager.rs` for mainnet** — Platform fee percentages appear hardcoded and must be made admin-configurable to allow operational flexibility without redeployment.
-
-12. **Verify royalty calculation precision in `royalty_distributor.rs`** — Fixed-point arithmetic used for royalty splits must be audited for off-by-one and rounding errors that could cause creator underpayment.
-
-13. **Add emergency halt / circuit breaker to `settlement_core.rs`** — There is no contract-level pause mechanism, meaning a discovered exploit cannot be stopped until a full redeployment.
-
-14. **Validate atomic swap timeout logic against mainnet ledger timing** — `atomic_swap.rs` uses time-based expiry that may behave differently under mainnet ledger close intervals vs. testnet.
-
-15. **Enforce maximum collection count per creator in `collection_factory.rs`** — No cap exists to prevent spam deployments that could bloat ledger state and degrade performance.
-
-16. **Validate NFT token burn authorization in `nft_contract`** — The burn entry point must verify the caller is the token owner (or an approved operator) before allowing destruction.
 
 17. **Document contract event schema for all emitted events** — No schema definition or documentation exists for the events emitted by contracts, blocking reliable off-chain indexing.
-
-18. **Validate `dependency_resolver.rs` logic against mainnet TTLs** — Transaction dependency resolution uses timing assumptions that must be verified against production ledger sequence constraints.
-
-19. **Recalibrate `gas_optimizer.rs` estimates for mainnet resource pricing** — Current estimates are placeholders tuned to testnet; mainnet resource fees for CPU instructions and read/write bytes differ materially.
 
 20. **Test `recovery_system.rs` failure modes under real network conditions** — Recovery paths are unit-tested against mocks but have not been exercised against an actual Soroban RPC with ledger sequence gaps.
 
