@@ -130,21 +130,9 @@
 
 ## Frontend Issues (55)
 
-96. **Replace `mockStats` with real API data on the logged-in dashboard** — `app/[locale]/auth/logged-in/page.tsx` imports and renders hardcoded `mockStats` for NFTs created, total sales, views, and followers instead of fetching live data.
 
-97. **Build NFT detail page under `marketplace/[nftId]/`** — The entire marketplace directory contains only a root `page.tsx`; there is no route for viewing individual NFT details, metadata, or ownership history.
-
-98. **Build bid submission UI for auction NFTs** — No bid form or bid flow exists in the frontend; users have no way to place a bid on an auctioned NFT from the marketplace.
-
-99. **Build direct purchase / checkout flow for fixed-price NFTs** — No purchase confirmation, price breakdown, or payment flow is implemented; users cannot buy NFTs through the platform.
-
-100. **Add filter, sort, and search UI to the marketplace listing page** — The marketplace root page has no filter controls (price range, category, status), no sort order selector, and no search input.
 
 101. **Remove `TestImageUpload/` debug route from production build** — The route at `app/[locale]/TestImageUpload/` is a developer test page with multiple debug `console.log` statements that must not be accessible in production.
-
-102. **Replace hardcoded mock data in `PopularCollection.tsx` with API fetch** — The component statically declares three mock collections with placeholder image paths that do not exist, breaking the homepage hero section.
-
-103. **Implement API persistence for collection "like" in `CollectionCard.tsx`** — Liking a collection only toggles local state and logs to console; the action is never sent to the backend and is lost on page reload.
 
 104. **Remove `console.log(form)` debug statement in `create-your-collection/page.tsx`** — A debug log printing the entire form state fires on every render change and must be removed before production.
 
@@ -152,23 +140,9 @@
 
 106. **Remove `console.log("useEffect")` debug log in `app/[locale]/page.tsx`** — A debug lifecycle log fires inside a `useEffect` on the homepage, adding noise and indicating unfinished development code.
 
-107. **Fully implement email/password login flow** — The email login path on the login page is incomplete; form submission does not fully wire to the backend authentication endpoint with proper error handling.
-
-108. **Build dedicated auction listing and bidding page** — Despite a `live-auctions.tsx` component existing, there is no route (`/marketplace/auctions`) where users can browse and bid on live-auction NFTs.
-
-109. **Add auction countdown timer component wired to real end times** — No countdown clock component is connected to auction end timestamps from the backend, leaving users without urgency cues.
-
-110. **Build NFT ownership history / provenance section on detail page** — Once the detail page exists, a transfer history section sourced from indexed contract events is required for buyer trust.
-
-111. **Build public creator profile page** — No route exists for viewing a creator's public profile, their listed NFTs, or collection — a fundamental discovery feature.
 
 112. **Replace WalletConnect integration placeholder with real implementation** — The WalletConnect provider in `StellarWalletProvider.tsx` is a placeholder; WalletConnect-compatible wallets cannot connect to the platform.
 
-113. **Implement transaction confirmation feedback UI** — After a user signs and submits a contract transaction, there is no in-app status indicator showing pending / confirmed / failed state.
-
-114. **Add error boundary on marketplace pages to prevent full-page crashes** — No `<ErrorBoundary>` wrapper exists for marketplace routes; an unhandled render error will show a blank page to users.
-
-115. **Add error boundary on creator dashboard pages** — Same absence of error boundaries on all creator dashboard routes, creating a poor experience if any dashboard widget throws.
 
 116. **Add loading skeleton for NFT detail and marketplace pages** — There are no skeleton screens for the NFT detail page (once built), causing jarring layout shifts during data fetching.
 
