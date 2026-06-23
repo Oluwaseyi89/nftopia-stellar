@@ -141,18 +141,7 @@
 106. **Remove `console.log("useEffect")` debug log in `app/[locale]/page.tsx`** — A debug lifecycle log fires inside a `useEffect` on the homepage, adding noise and indicating unfinished development code.
 
 
-112. **Replace WalletConnect integration placeholder with real implementation** — The WalletConnect provider in `StellarWalletProvider.tsx` is a placeholder; WalletConnect-compatible wallets cannot connect to the platform.
 
-
-116. **Add loading skeleton for NFT detail and marketplace pages** — There are no skeleton screens for the NFT detail page (once built), causing jarring layout shifts during data fetching.
-
-117. **Replace placeholder image paths in `PopularCollection.tsx` with real assets** — Paths like `/images/placeholder-main.jpg` do not exist in `public/`, causing 404s and broken image icons on the homepage.
-
-118. **Replace placeholder avatar paths in `CollectionCard.tsx` with fallback** — The card uses `/images/placeholder-avatar.png` which does not exist; a graceful SVG fallback or generated avatar must be used.
-
-119. **Add dynamic SEO meta tags for NFT detail pages** — No `<Head>` metadata or Next.js `generateMetadata` is implemented for NFT detail routes, preventing search engine indexing.
-
-120. **Add dynamic SEO meta tags for collection pages** — Collection pages have no title or description meta tags, making them invisible to search crawlers and unfavorable for social sharing.
 
 121. **Add Open Graph and Twitter Card tags for social sharing** — Neither NFT nor collection pages emit OG tags, so sharing links on social media shows no rich preview.
 
