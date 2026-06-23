@@ -78,17 +78,7 @@
 57. **Configure Redis AUTH password for production** — The Redis connection configuration does not enforce a password, leaving the cache open to anyone on the same network segment.
 
 
-61. **Add retry mechanism with exponential backoff for Soroban RPC calls** — No retry logic exists for transient RPC failures; a failed contract call raises an exception immediately with no recovery attempt.
 
-62. **Validate and document `SOROBAN_RPC_URL` mainnet endpoint** — The env variable is read but never validated at startup; an unconfigured or wrong RPC URL will silently fail contract calls.
-
-63. **Configure `STELLAR_HORIZON_URL` to mainnet endpoint** — The Horizon URL is pulled from environment config but no startup assertion validates it points to mainnet rather than testnet.
-
-
-65. **Configure structured JSON logging for production log aggregation** — The app uses NestJS default logger which outputs plain text; a JSON log format is required for centralized log aggregation (Datadog, Loki, etc.).
-
-
-75. **Implement transactional email service (SMTP or provider)** — No email service is wired up; registration confirmation, password reset, and bid notification emails are entirely absent.
 
 78. **Implement GDPR data export and account deletion** — No personal data export or right-to-erasure endpoint exists, creating legal liability in GDPR-applicable markets.
 
