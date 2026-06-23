@@ -37,19 +37,12 @@
 26. **Enforce maximum supply cap in `nft_contract`** — There is no hard supply ceiling enforceable at the contract level for a given collection, allowing unlimited minting beyond intended supply.
 
 
-29. **Adopt Soroban contract versioning in WASM metadata** — Contracts do not embed a version identifier in their WASM, making it impossible to distinguish deployed versions during incident response.
-
 30. **Configure persistent storage TTL for all storage entries** — Soroban storage entries without TTL will expire and be evicted; persistent entries for all contracts need explicit TTL extension logic.
 
 31. **Ensure all significant state transitions emit contract events** — Several state changes in the transaction_contract (e.g., operation failure rollback) do not emit events, creating indexing blind spots.
 
-32. **Add emergency pause function to `marketplace_settlement` contract** — Unlike ERC standards, no pause/unpause mechanism is present to stop trading activity during a security incident.
 
-33. **Enforce minimum bid increment at contract level in `auction_engine.rs`** — Minimum increment (e.g., 1% above current bid) is not enforced in contract logic, allowing micro-increment bid spam.
 
-34. **Add blocked/blacklisted address support in marketplace contract** — There is no mechanism to block known scammers or sanctioned addresses from interacting with the contract.
-
-35. **Validate factory address ownership for child collections** — The `collection_factory` does not validate that deployed collection contracts report back to the factory's canonical registry.
 
 36. **Make dispute resolution window period configurable** — The time window during which a buyer can raise a dispute is hardcoded and cannot be updated without redeployment.
 
