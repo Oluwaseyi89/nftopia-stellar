@@ -7,9 +7,6 @@
 
 ## Contract Issues (40)
 
-1. **Fix native XLM asset handling panic in `asset_utils.rs`** — `panic!("Native asset handling not implemented in this test version")` will crash the marketplace_settlement contract on any call involving native XLM assets on mainnet.
-
-
 
 3. **Define and configure mainnet contract addresses** — No mainnet contract IDs are present anywhere in the codebase; all clients reference testnet addresses which will not work on mainnet.
 
@@ -32,23 +29,15 @@
 
 
 
-25. **Add edge case tests for zero-amount and dust bids** — No tests cover bids with zero or near-zero amounts, which could be exploited to grief auctions or disrupt settlement logic.
-
-26. **Enforce maximum supply cap in `nft_contract`** — There is no hard supply ceiling enforceable at the contract level for a given collection, allowing unlimited minting beyond intended supply.
-
-
 30. **Configure persistent storage TTL for all storage entries** — Soroban storage entries without TTL will expire and be evicted; persistent entries for all contracts need explicit TTL extension logic.
 
 31. **Ensure all significant state transitions emit contract events** — Several state changes in the transaction_contract (e.g., operation failure rollback) do not emit events, creating indexing blind spots.
-
-
 
 
 36. **Make dispute resolution window period configurable** — The time window during which a buyer can raise a dispute is hardcoded and cannot be updated without redeployment.
 
 37. **Constrain approved-operator access in `nft_contract`** — Operator approval grants broad permissions; approval scope (e.g., per-token vs. global) must be clearly enforced and auditable.
 
-38. **Enforce maximum royalty cap in `royalty_distributor.rs`** — No ceiling exists on the royalty percentage a creator can set, which could be set to 100% and make secondary sales economically unwviable.
 
 39. **Implement batch minting support in `nft_contract`** — Single-mint-only design will be a gas cliff for collections; a batch mint entry point is needed for reasonable mainnet economics.
 
@@ -70,14 +59,6 @@
 
 57. **Configure Redis AUTH password for production** — The Redis connection configuration does not enforce a password, leaving the cache open to anyone on the same network segment.
 
-
-
-
-78. **Implement GDPR data export and account deletion** — No personal data export or right-to-erasure endpoint exists, creating legal liability in GDPR-applicable markets.
-
-79. **Add virus/malware scanning for uploaded NFT media files** — Uploaded files are stored to IPFS/Arweave without content scanning, allowing malicious file uploads that could affect downstream users.
-
-80. **Build image resizing and CDN delivery pipeline for NFT media** — NFT images are served at full resolution with no resizing or CDN caching layer, causing slow load times and high bandwidth costs.
 
 81. **Disable GraphQL introspection in production** — Schema introspection is enabled by default in NestJS Apollo and must be disabled in production to prevent schema harvesting by attackers.
 
@@ -151,12 +132,6 @@
 132. **Add ARIA labels and roles to NFT card interactive elements** — Like buttons, bid buttons, and card links in collection/NFT cards lack `aria-label` attributes, failing screen reader accessibility.
 
 133. **Add i18n coverage for all error and validation messages** — Error messages from form validation and API failures are hardcoded in English and not routed through the i18n system.
-
-134. **Add empty state UI for marketplace when no NFTs are listed** — The marketplace page has no "no results" state; a blank page is shown when the query returns nothing.
-
-135. **Implement pagination or infinite scroll for marketplace NFT listing** — The marketplace shows a static number of NFTs with no paging controls or scroll-triggered fetch for additional results.
-
-136. **Add 404 not-found page for invalid NFT and collection routes** — Dynamic routes for NFT detail and collection detail have no `notFound()` handling, causing unhandled Next.js errors on bad URLs.
 
 137. **Wire real data to creator dashboard sales page** — The sales analytics page under creator dashboard renders with no real data from the backend sales analytics endpoint.
 
