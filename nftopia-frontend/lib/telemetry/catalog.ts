@@ -291,4 +291,20 @@ export const TELEMETRY_EVENT_CATALOG: Record<TelemetryEventName, TelemetryEventC
     owner: "growth",
     status: "active",
   },
+  creator_dashboard_error: {
+    name: EVENT_NAMES.creatorDashboardError,
+    category: "creator",
+    description: "Creator dashboard render error event",
+    version: 1,
+    owner: "creator",
+    status: "active",
+  },
+  page_not_found: {
+    name: EVENT_NAMES.pageNotFound,
+    category: "navigation",
+    description: "User visited a page that returned a 404 not-found response",
+    version: 1,
+    owner: "navigation",
+    status: "active",
+  },
 };

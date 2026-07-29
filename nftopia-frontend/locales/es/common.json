@@ -231,7 +231,22 @@
       "title": "¡Oops!",
       "message": "No podemos encontrar la página que buscas.",
       "errorCode": "Código de error: 404",
-      "backToHome": "Volver al inicio"
+      "backToHome": "Volver al inicio",
+      "nft": {
+        "title": "NFT no encontrado",
+        "message": "El NFT que buscas no existe o ha sido eliminado.",
+        "backToMarketplace": "Ir al Marketplace"
+      },
+      "collection": {
+        "title": "Colección no encontrada",
+        "message": "La colección que buscas no existe o ha sido eliminada.",
+        "backToMarketplace": "Ir al Marketplace"
+      },
+      "auction": {
+        "title": "Subasta no encontrada",
+        "message": "La subasta que buscas no existe o ha finalizado.",
+        "backToAuctions": "Volver a subastas"
+      }
     },
     "connectWallet": {
       "connect": "Conectar billetera",
@@ -280,7 +295,11 @@
       "singleOrBatch": "Subida única o por lotes",
       "goToMint": "Ir a acuñar",
       "createCollection": "Crear colección",
-      "collectionDescription": "Configure las propiedades del contrato inteligente y las opciones de implementación de las colecciones."
+      "collectionDescription": "Configure las propiedades del contrato inteligente y las opciones de implementación de las colecciones.",
+      "errorFallbackTitle": "No se pudo cargar el panel",
+      "errorFallbackMessage": "Ocurrió un problema al cargar el panel de control. Hemos registrado este error y estamos trabajando para solucionarlo.",
+      "errorOfflineTitle": "Sin conexión a Internet",
+      "errorOfflineMessage": "Parece que estás desconectado. Por favor, comprueba tu conexión de red e inténtalo de nuevo."
     },
     "mintNFT": {
       "title": "Acuñar NFT",
