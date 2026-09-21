@@ -8,6 +8,7 @@ import {
 import { InjectRepository } from '@nestjs/typeorm';
 import { Brackets, Repository } from 'typeorm';
 import { ConfigService } from '@nestjs/config';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 import { Listing } from './entities/listing.entity';
 import { CreateListingDto } from './dto/create-listing.dto';
 import { BuyNftDto } from './dto/buy-nft.dto';
@@ -38,6 +39,7 @@ export class ListingService {
     private readonly configService: ConfigService,
     private readonly settlementClient: MarketplaceSettlementClient,
     private readonly transactionService: TransactionService,
+    private readonly eventEmitter: EventEmitter2,
   ) {}
 
   async create(dto: CreateListingDto, sellerId: string) {
@@ -59,10 +61,10 @@ export class ListingService {
           ? Math.floor((new Date(dto.expiresAt).getTime() - Date.now()) / 1000)
           : 0,
       };
-      await this.settlementClient.createSale(params);
+      const saleId = await this.settlementClient.createSale(params);
       // Optionally, sync to DB or return contract result
       // For GraphQL compatibility, return a Listing object (mock or DB-backed)
-      return this.listingRepo.create({
+      const listing = this.listingRepo.create({
         nftContractId: dto.nftContractId,
         nftTokenId: dto.nftTokenId,
         sellerId,
@@ -72,6 +74,16 @@ export class ListingService {
         status: ListingStatus.ACTIVE,
         // Optionally, add a field for contract saleId if needed
       });
+      // This branch doesn't persist a row (no DB-generated id yet), so the
+      // on-chain sale id is the only stable identifier available for
+      // moderation to reference.
+      this.emitListingCreated({
+        listingId: String(saleId),
+        sellerId,
+        nftContractId: dto.nftContractId,
+        nftTokenId: dto.nftTokenId,
+      });
+      return listing;
     }
 
     // Legacy DB logic
@@ -100,7 +112,30 @@ export class ListingService {
       status: ListingStatus.ACTIVE,
     });
 
-    return this.listingRepo.save(listing);
+    const saved = await this.listingRepo.save(listing);
+    this.emitListingCreated({
+      listingId: saved.id,
+      sellerId,
+      nftContractId: dto.nftContractId,
+      nftTokenId: dto.nftTokenId,
+    });
+    return saved;
+  }
+
+  /**
+   * Fires off-critical-path so a slow or throwing listener (e.g. the
+   * moderation queue enqueue) never delays or fails the create() response —
+   * mirrors NftService.emitSearchEvent.
+   */
+  private emitListingCreated(payload: {
+    listingId: string;
+    sellerId: string;
+    nftContractId: string;
+    nftTokenId: string;
+  }) {
+    setImmediate(() => {
+      this.eventEmitter.emit('listing.created', payload);
+    });
   }
 
   async findAll(query?: {

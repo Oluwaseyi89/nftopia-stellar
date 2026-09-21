@@ -1,9 +1,10 @@
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, KeyboardAvoidingView, Platform } from 'react-native';
+import React, { useRef, useState } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, TextInput } from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { AuthStackParamList } from '@/navigation/AuthNavigator';
 import { useWalletConnect } from '@/hooks/useWalletConnect';
 import { colors, spacing, borderRadius } from '@/constants/theme';
+import { KeyboardAwareScreen } from '@/src/components/KeyboardAwareScreen';
 import SecureInput from '@/components/wallet/SecureInput';
 import MnemonicInput from '@/components/wallet/MnemonicInput';
 import ValidationError from '@/screens/Auth/components/ValidationError';
@@ -18,6 +19,7 @@ export default function WalletImportScreen({ navigation }: Props) {
   const [mnemonic, setMnemonic] = useState('');
   const [password, setPassword] = useState('');
   const [localError, setLocalError] = useState<string | null>(null);
+  const passwordInputRef = useRef<TextInput>(null);
 
   const { importFromSecretKey, importFromMnemonic, isLoading, error, clearError } = useWalletConnect();
 
@@ -63,99 +65,104 @@ export default function WalletImportScreen({ navigation }: Props) {
 
   const displayError = localError || error;
 
-  return (
-    <KeyboardAvoidingView
-      style={styles.container}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-    >
-      <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
-        <Text style={styles.title}>Import Wallet</Text>
-        <Text style={styles.subtitle}>
-          Import your existing Stellar wallet
+  const footer = (
+    <View style={styles.footerGap}>
+      <TouchableOpacity
+        style={[styles.primaryButton, (isLoading) && styles.buttonDisabled]}
+        onPress={handleImport}
+        disabled={isLoading}
+      >
+        <Text style={styles.primaryButtonText}>
+          {isLoading ? 'Importing...' : 'Import Wallet'}
         </Text>
+      </TouchableOpacity>
 
-        <View style={styles.tabRow}>
-          <TouchableOpacity
-            style={[styles.tab, activeTab === 'secret' && styles.tabActive]}
-            onPress={() => setActiveTab('secret')}
-          >
-            <Text style={[styles.tabText, activeTab === 'secret' && styles.tabTextActive]}>
-              Secret Key
-            </Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.tab, activeTab === 'mnemonic' && styles.tabActive]}
-            onPress={() => setActiveTab('mnemonic')}
-          >
-            <Text style={[styles.tabText, activeTab === 'mnemonic' && styles.tabTextActive]}>
-              Recovery Phrase
-            </Text>
-          </TouchableOpacity>
-        </View>
+      <TouchableOpacity
+        style={styles.backButton}
+        onPress={() => navigation.goBack()}
+        disabled={isLoading}
+      >
+        <Text style={styles.backButtonText}>← Back</Text>
+      </TouchableOpacity>
+    </View>
+  );
 
-        <View style={styles.form}>
-          {activeTab === 'secret' ? (
-            <SecureInput
-              label="Secret Key"
-              placeholder="Enter your secret key (starts with S)"
-              value={secretKey}
-              onChangeText={setSecretKey}
-              editable={!isLoading}
-              testID="secret-key-input"
-            />
-          ) : (
-            <MnemonicInput
-              value={mnemonic}
-              onChangeText={setMnemonic}
-              editable={!isLoading}
-              testID="mnemonic-input"
-            />
-          )}
+  return (
+    <KeyboardAwareScreen
+      style={styles.container}
+      contentContainerStyle={styles.content}
+      footer={footer}
+    >
+      <Text style={styles.title}>Import Wallet</Text>
+      <Text style={styles.subtitle}>
+        Import your existing Stellar wallet
+      </Text>
 
-          <View style={styles.inputGroup}>
-            <Text style={styles.label}>Password</Text>
-            <View style={styles.passwordInputWrapper}>
-              <SecureInput
-                label=""
-                placeholder="Enter password to encrypt your wallet"
-                value={password}
-                onChangeText={setPassword}
-                editable={!isLoading}
-                testID="password-input"
-              />
-            </View>
-          </View>
-
-          <ValidationError message={displayError} />
-        </View>
-      </ScrollView>
-
-      <View style={styles.footer}>
+      <View style={styles.tabRow}>
         <TouchableOpacity
-          style={[styles.primaryButton, (isLoading) && styles.buttonDisabled]}
-          onPress={handleImport}
-          disabled={isLoading}
+          style={[styles.tab, activeTab === 'secret' && styles.tabActive]}
+          onPress={() => setActiveTab('secret')}
         >
-          <Text style={styles.primaryButtonText}>
-            {isLoading ? 'Importing...' : 'Import Wallet'}
+          <Text style={[styles.tabText, activeTab === 'secret' && styles.tabTextActive]}>
+            Secret Key
           </Text>
         </TouchableOpacity>
-
         <TouchableOpacity
-          style={styles.backButton}
-          onPress={() => navigation.goBack()}
-          disabled={isLoading}
+          style={[styles.tab, activeTab === 'mnemonic' && styles.tabActive]}
+          onPress={() => setActiveTab('mnemonic')}
         >
-          <Text style={styles.backButtonText}>← Back</Text>
+          <Text style={[styles.tabText, activeTab === 'mnemonic' && styles.tabTextActive]}>
+            Recovery Phrase
+          </Text>
         </TouchableOpacity>
       </View>
-    </KeyboardAvoidingView>
+
+      <View style={styles.form}>
+        {activeTab === 'secret' ? (
+          <SecureInput
+            label="Secret Key"
+            placeholder="Enter your secret key (starts with S)"
+            value={secretKey}
+            onChangeText={setSecretKey}
+            editable={!isLoading}
+            returnKeyType="next"
+            onSubmitEditing={() => passwordInputRef.current?.focus()}
+            testID="secret-key-input"
+          />
+        ) : (
+          <MnemonicInput
+            value={mnemonic}
+            onChangeText={setMnemonic}
+            editable={!isLoading}
+            testID="mnemonic-input"
+          />
+        )}
+
+        <View style={styles.inputGroup}>
+          <Text style={styles.label}>Password</Text>
+          <View style={styles.passwordInputWrapper}>
+            <SecureInput
+              label=""
+              placeholder="Enter password to encrypt your wallet"
+              value={password}
+              onChangeText={setPassword}
+              editable={!isLoading}
+              inputRef={passwordInputRef}
+              returnKeyType="done"
+              onSubmitEditing={handleImport}
+              testID="password-input"
+            />
+          </View>
+        </View>
+
+        <ValidationError message={displayError} />
+      </View>
+    </KeyboardAwareScreen>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
-    flex: 1,
     backgroundColor: colors.background,
   },
   content: {
@@ -217,9 +224,7 @@ const styles = StyleSheet.create({
   passwordInputWrapper: {
     marginTop: -4,
   },
-  footer: {
-    padding: spacing.lg,
-    paddingBottom: 32,
+  footerGap: {
     gap: spacing.sm,
   },
   primaryButton: {

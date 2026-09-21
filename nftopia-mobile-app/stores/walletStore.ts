@@ -15,18 +15,21 @@ interface WalletStoreState {
   balances: Record<string, { xlm: string; tokens: TokenBalance[] }>;
   isLoading: boolean;
   error: string | null;
+  lastBackupReminderShown: Record<string, string>; // publicKey -> ISO date string
 }
 
 interface WalletStoreActions {
   importFromSecretKey: (secretKey: string, password?: string) => Promise<Wallet>;
   importFromMnemonic: (mnemonic: string, password?: string) => Promise<Wallet>;
   createNewWallet: (password?: string) => Promise<Wallet>;
+  markBackupConfirmed: (publicKey: string, confirmed: boolean) => void;
   removeWallet: (publicKey: string) => void;
   setActiveWallet: (publicKey: string) => void;
   switchNetwork: (network: NetworkType) => void;
   fetchBalances: (publicKey?: string) => Promise<void>;
   revealSecretKey: (publicKey: string) => Promise<string | null>;
   revealMnemonic: (publicKey: string) => Promise<string | null>;
+  updateLastReminderShown: (publicKey: string) => void;
   clearWallets: () => void;
   clearError: () => void;
 }
@@ -42,6 +45,7 @@ const initialState: WalletStoreState = {
   balances: {},
   isLoading: false,
   error: null,
+  lastBackupReminderShown: {},
 };
 
 async function authenticateWithBiometrics(): Promise<boolean> {
@@ -60,6 +64,25 @@ export const useWalletStore = create<WalletStore>()(
   persist(
     (set, get) => ({
       ...initialState,
+
+      markBackupConfirmed: (publicKey: string, confirmed: boolean) => {
+        set((state) => ({
+          wallets: state.wallets.map((wallet) =>
+            wallet.publicKey === publicKey
+              ? { ...wallet, backupConfirmed: confirmed }
+              : wallet
+          ),
+        }));
+      },
+
+      updateLastReminderShown: (publicKey: string) => {
+        set((state) => ({
+          lastBackupReminderShown: {
+            ...state.lastBackupReminderShown,
+            [publicKey]: new Date().toISOString(),
+          },
+        }));
+      },
 
       importFromSecretKey: async (secretKey: string, password?: string) => {
         set({ isLoading: true, error: null });
@@ -228,6 +251,7 @@ export const useWalletStore = create<WalletStore>()(
         wallets: state.wallets,
         activePublicKey: state.activePublicKey,
         network: state.network,
+        lastBackupReminderShown: state.lastBackupReminderShown,
       }),
       storage: {
         getItem: async (name: string) => {

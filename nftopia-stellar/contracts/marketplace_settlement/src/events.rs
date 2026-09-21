@@ -320,6 +320,39 @@ pub struct PauseCancelledEvent {
     pub timestamp: u64,
 }
 
+// Atomic Swap Timeout Events
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct SwapExpiredEvent {
+    pub swap_id: u64,
+    pub transaction_id: u64,
+    pub expires_at: u64,
+    pub expires_at_ledger: u32,
+    pub expired_by_seconds: u64,
+    pub ledger: u32,
+    pub timestamp: u64,
+}
+
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct SwapAutoRefundedEvent {
+    pub swap_id: u64,
+    pub transaction_id: u64,
+    pub holder: Address,
+    pub asset: Asset,
+    pub amount: i128,
+    pub is_nft: bool,
+    pub timestamp: u64,
+}
+
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct SwapTimeoutConfigUpdatedEvent {
+    pub new_config: SwapTimeoutConfig,
+    pub updated_by: Address,
+    pub timestamp: u64,
+}
+
 // Configuration Events
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -378,6 +411,15 @@ pub struct AddressUnblockedEvent {
     pub unblocked_address: Address,
     pub unblocked_by: Address,
     pub timestamp: u64,
+}
+
+/// Emitted when the admin updates the max royalty cap.
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct RoyaltyCapUpdated {
+    pub old_cap: u64,
+    pub new_cap: u64,
+    pub updated_at: u64,
 }
 
 // Event emission functions
@@ -557,6 +599,24 @@ pub fn emit_fee_config_initialized(env: &Env, event: FeeConfigInitializedEvent) 
 }
 
 #[allow(deprecated)]
+pub fn emit_swap_expired(env: &Env, event: SwapExpiredEvent) {
+    env.events()
+        .publish(("MarketplaceSettlement", symbol_short!("swp_exprd")), event);
+}
+
+#[allow(deprecated)]
+pub fn emit_swap_auto_refunded(env: &Env, event: SwapAutoRefundedEvent) {
+    env.events()
+        .publish(("MarketplaceSettlement", symbol_short!("swp_refnd")), event);
+}
+
+#[allow(deprecated)]
+pub fn emit_swap_timeout_config_updated(env: &Env, event: SwapTimeoutConfigUpdatedEvent) {
+    env.events()
+        .publish(("MarketplaceSettlement", symbol_short!("swp_cfg")), event);
+}
+
+#[allow(deprecated)]
 pub fn emit_fee_config_updated(env: &Env, event: FeeConfigUpdatedEvent) {
     env.events()
         .publish(("MarketplaceSettlement", symbol_short!("fee_upd")), event);
@@ -614,4 +674,16 @@ pub fn emit_address_blocked(env: &Env, event: AddressBlockedEvent) {
 pub fn emit_address_unblocked(env: &Env, event: AddressUnblockedEvent) {
     env.events()
         .publish(("MarketplaceSettlement", symbol_short!("addr_unb")), event);
+}
+
+/// Emit royalty cap updated event.
+#[allow(deprecated)]
+pub fn emit_royalty_cap_updated(env: &Env, old_cap: u64, new_cap: u64) {
+    let payload = RoyaltyCapUpdated {
+        old_cap,
+        new_cap,
+        updated_at: env.ledger().timestamp(),
+    };
+    env.events()
+        .publish(("MarketplaceSettlement", symbol_short!("roy_cap")), payload);
 }

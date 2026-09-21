@@ -40,11 +40,13 @@ export default function OnboardingScreen({ navigation }: Props) {
       <View style={styles.footer}>
         <AuthButton
           title="Get Started"
+          testID="onboarding-get-started"
           onPress={() => navigation.navigate('WalletSelection')}
           variant="primary"
         />
         <AuthButton
           title="Sign In with Email"
+          testID="onboarding-email-sign-in"
           onPress={() => navigation.navigate('EmailLogin')}
           variant="secondary"
           textStyle={{ color: '#333' }}

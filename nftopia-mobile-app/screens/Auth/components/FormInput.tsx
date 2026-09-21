@@ -1,7 +1,15 @@
-import React, { useState } from 'react';
-import { View, Text, TextInput, StyleSheet, TouchableOpacity } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import {
+  View,
+  Text,
+  TextInput,
+  StyleSheet,
+  TouchableOpacity,
+  TextInputProps,
+  AccessibilityInfo,
+} from 'react-native';
 
-interface FormInputProps {
+export interface FormInputProps {
   label: string;
   placeholder: string;
   value: string;
@@ -15,6 +23,14 @@ interface FormInputProps {
   testID?: string;
   multiline?: boolean;
   numberOfLines?: number;
+  /** Label for the return key (e.g. "next", "done"). */
+  returnKeyType?: TextInputProps['returnKeyType'];
+  /** Called when the user presses the return key. Use for focus chaining. */
+  onSubmitEditing?: () => void;
+  /** Dismiss the keyboard after submit (defaults true for single-line). */
+  blurOnSubmit?: boolean;
+  /** Imperative handle to programmatically focus the input. */
+  inputRef?: React.Ref<TextInput>;
 }
 
 export default function FormInput({
@@ -31,13 +47,26 @@ export default function FormInput({
   testID,
   multiline = false,
   numberOfLines = 1,
+  returnKeyType,
+  onSubmitEditing,
+  blurOnSubmit,
+  inputRef,
 }: FormInputProps) {
   const [isFocused, setIsFocused] = useState(false);
 
+  useEffect(() => {
+    if (error) {
+      AccessibilityInfo.announceForAccessibility(error);
+    }
+  }, [error]);
+
   return (
     <View style={styles.container}>
-      <Text style={styles.label}>{label}</Text>
+      <Text style={styles.label} nativeID={`${testID}-label`}>
+        {label}
+      </Text>
       <TextInput
+        ref={inputRef}
         style={[
           styles.input,
           isFocused ? styles.inputFocused : undefined,
@@ -54,13 +83,30 @@ export default function FormInput({
         autoCapitalize={autoCapitalize}
         autoCorrect={autoCorrect}
         editable={editable}
+        returnKeyType={returnKeyType}
+        onSubmitEditing={onSubmitEditing}
+        blurOnSubmit={blurOnSubmit}
         onFocus={() => setIsFocused(true)}
         onBlur={() => setIsFocused(false)}
         testID={testID}
         multiline={multiline}
         numberOfLines={numberOfLines}
+        accessible
+        accessibilityLabel={label}
+        accessibilityHint={error ?? undefined}
+        accessibilityState={{ disabled: !editable }}
       />
-      {error ? <Text style={styles.errorText}>{error}</Text> : null}
+      {error ? (
+        <Text
+          style={styles.errorText}
+          accessible
+          accessibilityRole="text"
+          accessibilityLiveRegion="polite"
+          testID={testID ? `${testID}-error` : undefined}
+        >
+          {error}
+        </Text>
+      ) : null}
     </View>
   );
 }
@@ -90,7 +136,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff',
   },
   inputError: {
-    borderColor: '#FF3B30',
+    borderColor: '#D63228',
     backgroundColor: '#FFF5F5',
   },
   inputDisabled: {
@@ -103,7 +149,7 @@ const styles = StyleSheet.create({
   },
   errorText: {
     fontSize: 12,
-    color: '#FF3B30',
+    color: '#D63228',
     marginTop: 4,
   },
 });

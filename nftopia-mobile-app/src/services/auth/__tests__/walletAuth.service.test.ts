@@ -6,6 +6,16 @@ jest.mock('expo-secure-store', () => ({
   deleteItemAsync: jest.fn().mockResolvedValue(undefined),
 }));
 
+// WalletAuthService now stores tokens via the shared TokenStorage, which
+// falls back to AsyncStorage when SecureStore is unavailable — the real
+// package has an ESM entry point this Jest config doesn't transform, so it
+// must always be replaced with a factory mock.
+jest.mock('@react-native-async-storage/async-storage', () => ({
+  getItem: jest.fn().mockResolvedValue(null),
+  setItem: jest.fn().mockResolvedValue(undefined),
+  removeItem: jest.fn().mockResolvedValue(undefined),
+}));
+
 jest.mock('expo-crypto', () => ({
   CryptoDigestAlgorithm: { SHA256: 'SHA-256' },
   digestStringAsync: jest.fn().mockResolvedValue('mockedhash'),
@@ -278,6 +288,120 @@ describe('WalletAuthService', () => {
         code: AuthErrorCode.INVALID_SIGNATURE,
       });
     });
+
+    it('rejects with EXPIRED_NONCE and never signs when the challenge has already expired', async () => {
+      const expiredChallenge: ChallengeResponse = {
+        ...MOCK_CHALLENGE,
+        expiresAt: new Date(Date.now() - 1000).toISOString(),
+      };
+      mockFetchOk(expiredChallenge);
+
+      await expect(service.walletLogin(MOCK_WALLET)).rejects.toMatchObject({
+        code: AuthErrorCode.EXPIRED_NONCE,
+      });
+      expect(mockWalletService.signMessage).not.toHaveBeenCalled();
+      expect(global.fetch).toHaveBeenCalledTimes(1); // only the challenge call
+    });
+
+    it('rejects rather than storing tokens when the account requires 2FA', async () => {
+      global.fetch = jest
+        .fn()
+        .mockResolvedValueOnce({
+          ok: true,
+          status: 200,
+          json: jest.fn().mockResolvedValue(MOCK_CHALLENGE),
+        } as unknown as Response)
+        .mockResolvedValueOnce({
+          ok: true,
+          status: 200,
+          json: jest.fn().mockResolvedValue({
+            requiresTwoFactor: true,
+            tempToken: 'temp-123',
+          }),
+        } as unknown as Response);
+
+      await expect(service.walletLogin(MOCK_WALLET)).rejects.toMatchObject({
+        code: AuthErrorCode.AUTHENTICATION_FAILED,
+      });
+      expect(SecureStore.setItemAsync).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('network retry', () => {
+    it('recovers from a single transient network failure', async () => {
+      global.fetch = jest
+        .fn()
+        .mockRejectedValueOnce(new Error('ECONNRESET'))
+        .mockResolvedValueOnce({
+          ok: true,
+          status: 200,
+          json: jest.fn().mockResolvedValue(MOCK_CHALLENGE),
+        } as unknown as Response);
+
+      const result = await service.getChallenge(MOCK_WALLET.publicKey);
+
+      expect(result).toEqual(MOCK_CHALLENGE);
+      expect(global.fetch).toHaveBeenCalledTimes(2);
+    });
+
+    it('does not retry an HTTP error response (only a rejected fetch)', async () => {
+      mockFetchError(400, 'Invalid wallet address');
+
+      await expect(service.getChallenge('invalid')).rejects.toMatchObject({
+        code: AuthErrorCode.CHALLENGE_FAILED,
+      });
+      expect(global.fetch).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe('refreshAccessToken', () => {
+    it('exchanges the stored refresh token for a new pair and persists it', async () => {
+      (SecureStore.getItemAsync as jest.Mock).mockResolvedValue('stored-refresh-token');
+      mockFetchOk(MOCK_AUTH_RESPONSE);
+
+      const result = await service.refreshAccessToken();
+
+      expect(result).toEqual(MOCK_AUTH_RESPONSE);
+      expect(global.fetch).toHaveBeenCalledWith(
+        'http://test-api.example.com/auth/refresh',
+        expect.objectContaining({
+          method: 'POST',
+          body: JSON.stringify({ refreshToken: 'stored-refresh-token' }),
+        }),
+      );
+      expect(SecureStore.setItemAsync).toHaveBeenCalledWith(
+        'nftopia_access_token',
+        MOCK_AUTH_RESPONSE.access_token,
+      );
+    });
+
+    it('throws AUTHENTICATION_FAILED without a network call when no refresh token is stored', async () => {
+      (SecureStore.getItemAsync as jest.Mock).mockResolvedValue(null);
+      global.fetch = jest.fn();
+
+      await expect(service.refreshAccessToken()).rejects.toMatchObject({
+        code: AuthErrorCode.AUTHENTICATION_FAILED,
+      });
+      expect(global.fetch).not.toHaveBeenCalled();
+    });
+
+    it('throws AUTHENTICATION_FAILED when the backend rejects the refresh token', async () => {
+      (SecureStore.getItemAsync as jest.Mock).mockResolvedValue('stale-refresh-token');
+      mockFetchError(401, 'Invalid refresh token');
+
+      await expect(service.refreshAccessToken()).rejects.toMatchObject({
+        code: AuthErrorCode.AUTHENTICATION_FAILED,
+      });
+    });
+
+    it('throws NETWORK_ERROR when the refresh request cannot reach the server', async () => {
+      (SecureStore.getItemAsync as jest.Mock).mockResolvedValue('stored-refresh-token');
+      global.fetch = jest.fn().mockRejectedValue(new Error('offline'));
+
+      await expect(service.refreshAccessToken()).rejects.toMatchObject({
+        code: AuthErrorCode.NETWORK_ERROR,
+      });
+    });
   });
 
   describe('linkWallet', () => {
@@ -414,6 +538,13 @@ describe('WalletAuthService', () => {
       expect(err.code).toBe(AuthErrorCode.AUTHENTICATION_FAILED);
       expect(err.message).toBe('Something failed');
       expect(err instanceof Error).toBe(true);
+    });
+  });
+
+  describe('walletAuthService singleton', () => {
+    it('is exported as a ready-to-use instance', () => {
+      const { walletAuthService } = require('../walletAuth.service');
+      expect(walletAuthService).toBeInstanceOf(WalletAuthService);
     });
   });
 });

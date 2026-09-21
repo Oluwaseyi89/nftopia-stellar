@@ -32,35 +32,56 @@ export default function WalletList({
 
   const renderItem = ({ item }: { item: Wallet }) => {
     const isActive = item.publicKey === activePublicKey;
+    const shortKey = `${item.publicKey.slice(0, 12)}...${item.publicKey.slice(-8)}`;
+    const selectLabel = `Wallet ${shortKey}, ${isActive ? 'active' : 'inactive'}${
+      !item.backupConfirmed ? ', backup not confirmed' : ''
+    }`;
 
     return (
-      <TouchableOpacity
-        style={[styles.walletCard, isActive && styles.walletCardActive]}
-        onPress={() => onSelect(item.publicKey)}
-        activeOpacity={0.7}
-      >
-        <View style={styles.walletHeader}>
-          <View style={[styles.dot, isActive && styles.dotActive]} />
-          <Text style={styles.walletLabel} numberOfLines={1}>
-            {item.publicKey.slice(0, 12)}...{item.publicKey.slice(-8)}
-          </Text>
-          {isActive && <View style={styles.activeBadge}><Text style={styles.activeBadgeText}>Active</Text></View>}
-        </View>
+      <View style={[styles.walletCard, isActive && styles.walletCardActive]}>
+        {/* A plain TouchableOpacity wraps only the select action here (rather than
+            wrapping the whole card) so the nested Export/Remove buttons below stay
+            independently reachable by VoiceOver/TalkBack instead of being merged
+            into one unreachable "dead end" element. */}
+        <TouchableOpacity
+          onPress={() => onSelect(item.publicKey)}
+          activeOpacity={0.7}
+          accessibilityRole="button"
+          accessibilityLabel={selectLabel}
+          accessibilityState={{ selected: isActive }}
+        >
+          <View style={styles.walletHeader}>
+            <View style={[styles.dot, isActive && styles.dotActive]} />
+            <Text style={styles.walletLabel} numberOfLines={1}>
+              {shortKey}
+            </Text>
+            <View style={styles.badgeContainer}>
+              {isActive && <View style={styles.activeBadge}><Text style={styles.activeBadgeText}>Active</Text></View>}
+              {!item.backupConfirmed && <View style={styles.warningBadge}><Text style={styles.warningBadgeText}>At Risk</Text></View>}
+            </View>
+          </View>
+        </TouchableOpacity>
         <View style={styles.walletActions}>
           <TouchableOpacity
             style={styles.actionButton}
             onPress={() => onExport(item.publicKey)}
+            accessibilityRole="button"
+            accessibilityLabel={`Export wallet ${shortKey}`}
+            hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
           >
             <Text style={styles.actionText}>Export</Text>
           </TouchableOpacity>
           <TouchableOpacity
             style={[styles.actionButton, styles.actionRemove]}
             onPress={() => setRemovingKey(item.publicKey)}
+            accessibilityRole="button"
+            accessibilityLabel={`Remove wallet ${shortKey}`}
+            hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
           >
             <Text style={[styles.actionText, styles.actionRemoveText]}>Remove</Text>
           </TouchableOpacity>
         </View>
-      </TouchableOpacity>
+      </View>
     );
   };
 
@@ -129,6 +150,10 @@ const styles = StyleSheet.create({
     fontFamily: 'monospace',
     color: colors.text,
   },
+  badgeContainer: {
+    flexDirection: 'row',
+    gap: spacing.xs,
+  },
   activeBadge: {
     backgroundColor: colors.success,
     borderRadius: borderRadius.sm,
@@ -139,6 +164,19 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: '700',
     color: colors.textInverse,
+  },
+  warningBadge: {
+    backgroundColor: colors.warningBackground,
+    borderRadius: borderRadius.sm,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 2,
+    borderWidth: 1,
+    borderColor: colors.warning,
+  },
+  warningBadgeText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: colors.warningText,
   },
   walletActions: {
     flexDirection: 'row',

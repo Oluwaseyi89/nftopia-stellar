@@ -1,9 +1,11 @@
+import { ForbiddenException, NotFoundException } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { ConfigService } from '@nestjs/config';
 import { OrderService } from './order.service';
 import { Order } from './entities/order.entity';
+import { OrderInterface } from './interfaces/order.interface';
 import { MarketplaceSettlementClient } from '../stellar/marketplace-settlement.client';
 import { OrderType, OrderStatus } from './dto/create-order.dto';
 import { SelectQueryBuilder } from 'typeorm';
@@ -365,6 +367,156 @@ describe('OrderService', () => {
         'order.status = :status',
         { status: OrderStatus.COMPLETED },
       ]);
+    });
+  });
+
+  describe('findOneForUser (#488)', () => {
+    const makeOrder = (
+      overrides: Partial<OrderInterface> = {},
+    ): OrderInterface => ({
+      id: 'order-1',
+      nftId: 'nft-1',
+      buyerId: 'buyer-1',
+      sellerId: 'seller-1',
+      price: '10',
+      currency: 'XLM',
+      type: OrderType.SALE,
+      status: OrderStatus.COMPLETED,
+      createdAt: new Date('2026-01-01T00:00:00Z'),
+      ...overrides,
+    });
+
+    it('returns the order when the caller is its buyer', async () => {
+      jest.spyOn(service, 'findOne').mockResolvedValue(makeOrder());
+
+      const result = await service.findOneForUser('buyer-1', 'order-1');
+
+      expect(result.id).toBe('order-1');
+    });
+
+    it('returns the order when the caller is its seller', async () => {
+      jest.spyOn(service, 'findOne').mockResolvedValue(makeOrder());
+
+      const result = await service.findOneForUser('seller-1', 'order-1');
+
+      expect(result.id).toBe('order-1');
+    });
+
+    it('throws ForbiddenException when the caller is neither buyer nor seller', async () => {
+      jest.spyOn(service, 'findOne').mockResolvedValue(makeOrder());
+
+      await expect(
+        service.findOneForUser('some-other-user', 'order-1'),
+      ).rejects.toBeInstanceOf(ForbiddenException);
+    });
+
+    it('propagates NotFoundException when the order does not exist', async () => {
+      jest
+        .spyOn(service, 'findOne')
+        .mockRejectedValue(new NotFoundException('Order not found'));
+
+      await expect(
+        service.findOneForUser('buyer-1', 'missing-order'),
+      ).rejects.toBeInstanceOf(NotFoundException);
+    });
+  });
+
+  describe('findAllForUser (#488)', () => {
+    const makeOrder = (
+      overrides: Partial<OrderInterface> = {},
+    ): OrderInterface => ({
+      id: 'order-1',
+      nftId: 'nft-1',
+      buyerId: 'buyer-1',
+      sellerId: 'seller-1',
+      price: '10',
+      currency: 'XLM',
+      type: OrderType.SALE,
+      status: OrderStatus.COMPLETED,
+      createdAt: new Date('2026-01-01T00:00:00Z'),
+      ...overrides,
+    });
+
+    it('queries as both buyer and seller, scoped to the given userId — never a caller-supplied one', async () => {
+      const findAllSpy = jest.spyOn(service, 'findAll').mockResolvedValue([]);
+
+      await service.findAllForUser('user-1', {
+        // even if a caller tried to sneak buyerId/sellerId into filters,
+        // the Pick<> type excludes them from the parameter entirely
+      });
+
+      expect(findAllSpy).toHaveBeenCalledWith(
+        expect.objectContaining({ buyerId: 'user-1' }),
+      );
+      expect(findAllSpy).toHaveBeenCalledWith(
+        expect.objectContaining({ sellerId: 'user-1' }),
+      );
+    });
+
+    it('merges and de-duplicates orders found as both buyer and seller', async () => {
+      const shared = makeOrder({ id: 'order-shared' });
+      const asBuyerOnly = makeOrder({
+        id: 'order-buyer-only',
+        createdAt: new Date('2026-01-02T00:00:00Z'),
+      });
+      jest
+        .spyOn(service, 'findAll')
+        .mockResolvedValueOnce([shared, asBuyerOnly]) // as buyer
+        .mockResolvedValueOnce([shared]); // as seller
+
+      const result = await service.findAllForUser('user-1', {});
+
+      expect(result.items.map((o) => o.id).sort()).toEqual(
+        ['order-buyer-only', 'order-shared'].sort(),
+      );
+      expect(result.totalCount).toBe(2);
+    });
+
+    it('sorts merged results by createdAt descending', async () => {
+      const older = makeOrder({
+        id: 'order-older',
+        createdAt: new Date('2026-01-01T00:00:00Z'),
+      });
+      const newer = makeOrder({
+        id: 'order-newer',
+        createdAt: new Date('2026-01-05T00:00:00Z'),
+      });
+      jest
+        .spyOn(service, 'findAll')
+        .mockResolvedValueOnce([older])
+        .mockResolvedValueOnce([newer]);
+
+      const result = await service.findAllForUser('user-1', {});
+
+      expect(result.items.map((o) => o.id)).toEqual([
+        'order-newer',
+        'order-older',
+      ]);
+    });
+
+    it('paginates the merged result set', async () => {
+      const orders = Array.from({ length: 5 }, (_, i) =>
+        makeOrder({
+          id: `order-${i}`,
+          createdAt: new Date(2026, 0, i + 1),
+        }),
+      );
+      jest
+        .spyOn(service, 'findAll')
+        .mockResolvedValueOnce(orders)
+        .mockResolvedValueOnce([]);
+
+      const result = await service.findAllForUser(
+        'user-1',
+        {},
+        { page: 1, limit: 2 },
+      );
+
+      expect(result.items).toHaveLength(2);
+      expect(result.totalCount).toBe(5);
+      expect(result.hasNextPage).toBe(true);
+      // newest first: order-4 (Jan 5) then order-3 (Jan 4)
+      expect(result.items.map((o) => o.id)).toEqual(['order-4', 'order-3']);
     });
   });
 });

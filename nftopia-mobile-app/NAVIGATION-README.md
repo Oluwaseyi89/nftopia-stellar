@@ -172,6 +172,14 @@ return (
 - **UI Elements**: Registration form, terms agreement
 - **Future**: Will integrate with backend API
 
+### FavoritesScreen
+- **Purpose**: Wishlist for saved NFTs and collections
+- **UI Elements**: Tabs (NFTs / Collections), heart-toggle buttons, empty state with CTA, remove confirmation
+- **State**: `stores/favoritesStore.ts` (Zustand) tracks `favorites` (NFT ids) and `favoriteCollections` (collection ids)
+- **Persistence**: The favorites store persists via the shared async-storage persist middleware (`@react-native-async-storage/async-storage`), so saved items survive app restarts
+- **Fallback / Data model**: Persistence is **device-local only** — there is no backend sync yet. This is a documented, intentional limitation until an authenticated backend sync API exists. Favorites are identified solely by NFT/collection ids; full item metadata is re-fetched from the API when the Favorites screen loads, so a favorited item that is removed from the API simply won't render (its id is kept until the user removes it).
+- **Navigation**: `Favorites` route in `MainNavigator.tsx`, reachable from the Profile screen ("Favorites" row with a count badge)
+
 ## Security Features
 
 1. **Secure Storage**: All sensitive data stored in Expo SecureStore

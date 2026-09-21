@@ -27,7 +27,8 @@ NFTopia Mobile App is the React Native surface for onboarding users, creating or
 5. [Project Structure](#-project-structure)
 6. [Authentication and Wallet Layer](#-authentication-and-wallet-layer)
 7. [Testing](#-testing)
-8. [Repository Notes](#-repository-notes)
+8. [Accessibility](#-accessibility)
+9. [Repository Notes](#-repository-notes)
 
 ## 🏗️ Architecture
 
@@ -126,6 +127,15 @@ npm test
 ```
 
 There are tests for wallet services, auth services, and auth store behavior in the repository.
+
+## ♿ Accessibility
+
+New and updated screens are expected to follow
+[`docs/ACCESSIBILITY.md`](./docs/ACCESSIBILITY.md) — a short checklist
+covering accessibility labels/roles, touch target sizing, focus order, font
+scaling, and color contrast. See
+[`docs/ACCESSIBILITY_AUDIT.md`](./docs/ACCESSIBILITY_AUDIT.md) for the audit
+findings behind it.
 
 ## 📌 Repository Notes
 

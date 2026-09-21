@@ -1,3 +1,14 @@
+// TokenStorage falls back to AsyncStorage when SecureStore is unavailable;
+// the real package has an ESM entry point this Jest config doesn't
+// transform, so it must be replaced before `../tokenStorage` is loaded —
+// jest.mock("../tokenStorage") below still requires the real module once
+// to build its automock, which is enough to trigger the parse error.
+jest.mock("@react-native-async-storage/async-storage", () => ({
+  getItem: jest.fn().mockResolvedValue(null),
+  setItem: jest.fn().mockResolvedValue(undefined),
+  removeItem: jest.fn().mockResolvedValue(undefined),
+}));
+
 import { AuthService } from "../auth.service";
 import { tokenStorage } from "../tokenStorage";
 import { EmailAuthResponse } from "../types";

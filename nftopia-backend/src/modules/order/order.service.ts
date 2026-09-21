@@ -3,6 +3,7 @@ import {
   Injectable,
   NotFoundException,
   BadRequestException,
+  ForbiddenException,
   Logger,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
@@ -250,6 +251,63 @@ export class OrderService {
     const order = await this.orderRepository.findOne({ where: { id } });
     if (!order) throw new NotFoundException('Order not found');
     return this.toOrderInterface(order);
+  }
+
+  /**
+   * findOne() scoped to a specific user: throws ForbiddenException if the
+   * order exists but that user is neither its buyer nor seller. Used
+   * wherever ownership must be enforced server-side rather than trusted
+   * from caller input — e.g. the AI agent's get_order tool (#488).
+   */
+  async findOneForUser(userId: string, id: string): Promise<OrderInterface> {
+    const order = await this.findOne(id);
+    if (order.buyerId !== userId && order.sellerId !== userId) {
+      throw new ForbiddenException('You do not have access to this order');
+    }
+    return order;
+  }
+
+  /**
+   * Orders where the given user is either the buyer or the seller —
+   * ORed, not ANDed, so it can't be expressed as a single findAll() filter
+   * (which ANDs buyerId/sellerId together). Ignores any buyerId/sellerId in
+   * `filters`: ownership always comes from `userId`, never from caller
+   * input. Used wherever a "my orders" view must be scoped server-side —
+   * e.g. the AI agent's search_orders tool (#488).
+   */
+  async findAllForUser(
+    userId: string,
+    filters: Pick<
+      OrderQueryDto,
+      'nftId' | 'type' | 'status' | 'fromDate' | 'toDate'
+    >,
+    pagination: { page?: number; limit?: number } = {},
+  ): Promise<OrderPaginatedResponseDto> {
+    const [asBuyer, asSeller] = await Promise.all([
+      this.findAll({ ...filters, buyerId: userId }),
+      this.findAll({ ...filters, sellerId: userId }),
+    ]);
+
+    const merged = new Map<string, OrderInterface>();
+    for (const order of [...asBuyer, ...asSeller]) {
+      merged.set(order.id, order);
+    }
+    const sorted = [...merged.values()].sort(
+      (a, b) => b.createdAt.getTime() - a.createdAt.getTime(),
+    );
+
+    const page = Math.max(pagination.page ?? 1, 1);
+    const limit = Math.min(Math.max(pagination.limit ?? 20, 1), 100);
+    const start = (page - 1) * limit;
+    const items = sorted.slice(start, start + limit);
+
+    return {
+      items,
+      totalCount: sorted.length,
+      page,
+      limit,
+      hasNextPage: start + limit < sorted.length,
+    };
   }
 
   async findByNFTIds(nftIds: string[]): Promise<OrderInterface[]> {

@@ -10,6 +10,20 @@
       "connectWallet": "Wallet verbinden",
       "language": "Sprache"
     },
+    "walletModal": {
+      "title": "Wallet verbinden",
+      "subtitle": "Wählen Sie eine Stellar-Wallet aus.",
+      "scanTitle": "Mit mobiler Wallet scannen",
+      "scanInstructions": "Öffnen Sie LOBSTR oder eine WalletConnect-kompatible Stellar-Wallet, scannen Sie den QR-Code und bestätigen Sie die Verbindung.",
+      "copyPairingCode": "Code kopieren",
+      "copied": "Kopiert!",
+      "generatingQr": "QR-Code wird generiert…",
+      "waitingApproval": "Warte auf Bestätigung…",
+      "backToWallets": "Zurück zu Wallets",
+      "tryAgain": "Erneut versuchen",
+      "connectionFailed": "Verbindung fehlgeschlagen",
+      "poweredBy": "Gesichert durch Stellar Blockchain"
+    },
     "auth": {
       "signIn": "Anmelden",
       "signUp": "Registrieren",

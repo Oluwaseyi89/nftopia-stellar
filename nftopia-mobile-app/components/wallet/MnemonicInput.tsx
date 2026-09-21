@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import { View, Text, TextInput, StyleSheet, TouchableOpacity } from 'react-native';
 import { colors, spacing, borderRadius } from '@/constants/theme';
 
@@ -11,6 +11,7 @@ interface MnemonicInputProps {
 }
 
 const VALID_WORD_COUNTS = [12, 15, 18, 21, 24];
+const MAX_WORDS = 24;
 
 export default function MnemonicInput({
   value,
@@ -21,6 +22,7 @@ export default function MnemonicInput({
 }: MnemonicInputProps) {
   const [mode, setMode] = useState<'paste' | 'words'>('paste');
   const [wordInputs, setWordInputs] = useState<string[]>(Array(12).fill(''));
+  const wordRefs = useRef<Array<TextInput | null>>([]);
 
   const wordCount = value.trim() ? value.trim().split(/\s+/).length : 0;
   const isValidCount = VALID_WORD_COUNTS.includes(wordCount);
@@ -31,6 +33,15 @@ export default function MnemonicInput({
     setWordInputs(updated);
     const phrase = updated.filter((w) => w.trim()).join(' ');
     onChangeText(phrase);
+  };
+
+  // Pressing Return / Next on a word advances focus to the next word slot, so
+  // multi-word entry is fluid while the keyboard stays open.
+  const handleWordSubmit = (index: number) => {
+    const next = index + 1;
+    if (next < MAX_WORDS) {
+      wordRefs.current[next]?.focus();
+    }
   };
 
   const switchToWords = () => {
@@ -61,10 +72,13 @@ export default function MnemonicInput({
           </TouchableOpacity>
         </View>
         <View style={styles.wordGrid}>
-          {wordInputs.slice(0, 24).map((word, index) => (
+          {wordInputs.slice(0, MAX_WORDS).map((word, index) => (
             <View key={index} style={styles.wordInputWrapper}>
               <Text style={styles.wordIndex}>{index + 1}.</Text>
               <TextInput
+                ref={(ref) => {
+                  wordRefs.current[index] = ref;
+                }}
                 style={styles.wordInput}
                 placeholder={`Word ${index + 1}`}
                 placeholderTextColor={colors.textTertiary}
@@ -73,6 +87,8 @@ export default function MnemonicInput({
                 autoCapitalize="none"
                 autoCorrect={false}
                 editable={editable}
+                returnKeyType={index < MAX_WORDS - 1 ? 'next' : 'done'}
+                onSubmitEditing={() => handleWordSubmit(index)}
                 testID={testID ? `${testID}-word-${index}` : undefined}
               />
             </View>
@@ -94,6 +110,9 @@ export default function MnemonicInput({
           <Text style={styles.switchLink}>Enter word-by-word</Text>
         </TouchableOpacity>
       </View>
+      {/* Paste mode is a multiline field: pasting a full phrase (12-24 words)
+          works in one gesture and Return inserts a newline instead of blurring,
+          so multi-word entry stays clean with the keyboard open. */}
       <TextInput
         style={[styles.textArea, error ? styles.inputError : undefined]}
         placeholder="Paste your 12, 15, 18, 21, or 24 word phrase"
@@ -105,6 +124,7 @@ export default function MnemonicInput({
         autoCapitalize="none"
         autoCorrect={false}
         editable={editable}
+        blurOnSubmit={false}
         testID={testID}
       />
       {value.trim() ? (

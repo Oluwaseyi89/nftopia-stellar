@@ -12,8 +12,8 @@ import {
 } from 'react-native';
 
 import { stellarWalletService } from '../../services/stellar/wallet.service';
-import { Wallet } from '../../services/stellar/types';
-import { useAuthStore } from '../../stores/authStore';
+import { useWalletConnect } from '@/hooks/useWalletConnect';
+import { useAuth } from '@/hooks/useAuth';
 import { SecretKeyInput } from './components/SecretKeyInput';
 
 type ImportMethod = 'secretKey' | 'mnemonic';
@@ -33,9 +33,8 @@ export const WalletImportScreen: React.FC<WalletImportScreenProps> = ({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const setWalletInStore = useAuthStore(
-    (state) => (state as { setWallet: (w: Wallet | null) => void }).setWallet,
-  );
+  const { importFromSecretKey, importFromMnemonic } = useWalletConnect();
+  const { login } = useAuth();
 
   const formattedMnemonic = mnemonic
     .toLowerCase()
@@ -58,19 +57,11 @@ export const WalletImportScreen: React.FC<WalletImportScreenProps> = ({
     setError(null);
 
     try {
-      let wallet: Wallet;
-      if (method === 'secretKey') {
-        wallet = await stellarWalletService.importFromSecretKey(
-          secretKey.trim(),
-          password || undefined,
-        );
-      } else {
-        wallet = await stellarWalletService.importFromMnemonic(
-          formattedMnemonic,
-          password || undefined,
-        );
-      }
-      setWalletInStore(wallet);
+      const wallet =
+        method === 'secretKey'
+          ? await importFromSecretKey(secretKey.trim(), password || undefined)
+          : await importFromMnemonic(formattedMnemonic, password || undefined);
+      await login(wallet);
       onComplete?.();
     } catch (err: unknown) {
       const message =

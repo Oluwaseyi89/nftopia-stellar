@@ -1,8 +1,9 @@
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Alert, ActivityIndicator, ScrollView } from 'react-native';
+import React, { useRef, useState } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, Alert, ActivityIndicator, TextInput } from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { AuthStackParamList } from '@/navigation/AuthNavigator';
 import { useAuthStore } from '@/stores/authStore';
+import { KeyboardAwareScreen } from '@/src/components/KeyboardAwareScreen';
 import FormInput from './components/FormInput';
 import PasswordStrengthIndicator from './components/PasswordStrengthIndicator';
 import { validateEmail, validatePassword, validateUsername, validateConfirmPassword } from './utils/validation';
@@ -14,6 +15,11 @@ export default function EmailRegisterScreen({ navigation }: Props) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+
+  // Field refs for focus chaining via the return key.
+  const emailRef = useRef<TextInput>(null);
+  const passwordRef = useRef<TextInput>(null);
+  const confirmPasswordRef = useRef<TextInput>(null);
   
   // Validation errors
   const [usernameError, setUsernameError] = useState<string | null>(null);
@@ -98,8 +104,43 @@ export default function EmailRegisterScreen({ navigation }: Props) {
     }
   };
 
+  const footer = (
+    <View style={styles.footerGap}>
+      <TouchableOpacity
+        style={[styles.primaryButton, isLoading && styles.buttonDisabled]}
+        onPress={handleRegister}
+        disabled={isLoading}
+        testID="register-button"
+      >
+        {isLoading ? (
+          <ActivityIndicator color="#fff" />
+        ) : (
+          <Text style={styles.primaryButtonText}>Create Account</Text>
+        )}
+      </TouchableOpacity>
+
+      <View style={styles.row}>
+        <Text style={styles.footerText}>Already have an account? </Text>
+        <TouchableOpacity onPress={() => navigation.navigate('EmailLogin')}>
+          <Text style={styles.linkText}>Sign In</Text>
+        </TouchableOpacity>
+      </View>
+
+      <TouchableOpacity
+        style={styles.backButton}
+        onPress={() => navigation.goBack()}
+        disabled={isLoading}
+      >
+        <Text style={styles.backButtonText}>← Back</Text>
+      </TouchableOpacity>
+    </View>
+  );
+
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.content}>
+    <KeyboardAwareScreen
+      footer={footer}
+      contentContainerStyle={styles.content}
+    >
       <Text style={styles.title}>Create Account</Text>
       <Text style={styles.subtitle}>
         Sign up to start your NFT journey
@@ -118,6 +159,8 @@ export default function EmailRegisterScreen({ navigation }: Props) {
           autoCorrect={false}
           editable={!isLoading}
           error={usernameError}
+          returnKeyType="next"
+          onSubmitEditing={() => emailRef.current?.focus()}
           testID="username-input"
         />
 
@@ -134,6 +177,9 @@ export default function EmailRegisterScreen({ navigation }: Props) {
           autoCorrect={false}
           editable={!isLoading}
           error={emailError}
+          inputRef={emailRef}
+          returnKeyType="next"
+          onSubmitEditing={() => passwordRef.current?.focus()}
           testID="email-input"
         />
 
@@ -153,6 +199,9 @@ export default function EmailRegisterScreen({ navigation }: Props) {
             autoCapitalize="none"
             editable={!isLoading}
             error={passwordError}
+            inputRef={passwordRef}
+            returnKeyType="next"
+            onSubmitEditing={() => confirmPasswordRef.current?.focus()}
             testID="password-input"
           />
           <PasswordStrengthIndicator password={password} />
@@ -170,6 +219,9 @@ export default function EmailRegisterScreen({ navigation }: Props) {
           autoCapitalize="none"
           editable={!isLoading}
           error={confirmPasswordError}
+          inputRef={confirmPasswordRef}
+          returnKeyType="done"
+          onSubmitEditing={handleRegister}
           testID="confirm-password-input"
         />
 
@@ -181,48 +233,15 @@ export default function EmailRegisterScreen({ navigation }: Props) {
           </Text>
         </View>
       </View>
-
-      <View style={styles.footer}>
-        <TouchableOpacity
-          style={[styles.primaryButton, isLoading && styles.buttonDisabled]}
-          onPress={handleRegister}
-          disabled={isLoading}
-          testID="register-button"
-        >
-          {isLoading ? (
-            <ActivityIndicator color="#fff" />
-          ) : (
-            <Text style={styles.primaryButtonText}>Create Account</Text>
-          )}
-        </TouchableOpacity>
-
-        <View style={styles.row}>
-          <Text style={styles.footerText}>Already have an account? </Text>
-          <TouchableOpacity onPress={() => navigation.navigate('EmailLogin')}>
-            <Text style={styles.linkText}>Sign In</Text>
-          </TouchableOpacity>
-        </View>
-
-        <TouchableOpacity
-          style={styles.backButton}
-          onPress={() => navigation.goBack()}
-          disabled={isLoading}
-        >
-          <Text style={styles.backButtonText}>← Back</Text>
-        </TouchableOpacity>
-      </View>
-    </ScrollView>
+    </KeyboardAwareScreen>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#ffffff',
-  },
   content: {
-    padding: 24,
+    paddingHorizontal: 24,
     paddingTop: 60,
+    backgroundColor: '#ffffff',
   },
   title: {
     fontSize: 32,
@@ -241,20 +260,6 @@ const styles = StyleSheet.create({
   inputGroup: {
     gap: 8,
   },
-  label: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#333',
-  },
-  input: {
-    backgroundColor: '#f8f9fa',
-    borderRadius: 12,
-    paddingVertical: 16,
-    paddingHorizontal: 16,
-    fontSize: 16,
-    borderWidth: 1,
-    borderColor: '#e9ecef',
-  },
   termsBox: {
     backgroundColor: '#f8f9fa',
     padding: 16,
@@ -271,16 +276,14 @@ const styles = StyleSheet.create({
     color: '#007AFF',
     fontWeight: '600',
   },
-  footer: {
-    paddingBottom: 32,
-    gap: 16,
-    marginTop: 24,
-  },
   primaryButton: {
     backgroundColor: '#000',
     borderRadius: 12,
     paddingVertical: 16,
     alignItems: 'center',
+  },
+  footerGap: {
+    gap: 16,
   },
   buttonDisabled: {
     opacity: 0.6,

@@ -10,6 +10,20 @@
     "connectWallet": "Connecter le portefeuille",
     "language": "Langue"
   },
+  "walletModal": {
+    "title": "Connecter le portefeuille",
+    "subtitle": "Choisissez un portefeuille Stellar. Freighter est recommandé.",
+    "scanTitle": "Scanner avec un portefeuille mobile",
+    "scanInstructions": "Ouvrez LOBSTR ou tout portefeuille Stellar compatible WalletConnect, scannez le code QR et approuvez.",
+    "copyPairingCode": "Copier le code",
+    "copied": "Copié !",
+    "generatingQr": "Génération du code QR…",
+    "waitingApproval": "En attente d'approbation…",
+    "backToWallets": "Retour aux portefeuilles",
+    "tryAgain": "Réessayer",
+    "connectionFailed": "Échec de connexion",
+    "poweredBy": "Sécurisé par la blockchain Stellar"
+  },
   "auth": {
     "signIn": "Se connecter",
     "signUp": "S'inscrire",

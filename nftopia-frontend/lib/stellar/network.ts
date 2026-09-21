@@ -1,4 +1,4 @@
-import { StellarNetwork } from "@/types/stellar";
+import { StellarNetwork, WalletProvider } from "@/types/stellar";
 import { STELLAR_NETWORKS } from "./client";
 
 export function getNetworkConfig(network: StellarNetwork) {
@@ -33,13 +33,22 @@ export function getExplorerUrl(
  * Returns true if they match, false otherwise.
  */
 export async function validateNetwork(
-  provider: "freighter" | "albedo",
+  provider: WalletProvider,
   expectedNetwork: StellarNetwork
 ): Promise<boolean> {
   if (provider === "freighter") {
     try {
       const { getFreighterNetwork } = await import("./wallet/freighter");
       const connectedNetwork = await getFreighterNetwork();
+      return connectedNetwork === expectedNetwork;
+    } catch {
+      return false;
+    }
+  }
+  if (provider === "walletconnect" || provider === "lobstr") {
+    try {
+      const { getWalletConnectNetwork } = await import("./wallet/walletconnect");
+      const connectedNetwork = await getWalletConnectNetwork();
       return connectedNetwork === expectedNetwork;
     } catch {
       return false;

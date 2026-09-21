@@ -23,7 +23,7 @@ export default function WalletCreateScreen({ navigation }: Props) {
   const [localError, setLocalError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
 
-  const { createNewWallet, isLoading, error, clearError } = useWalletConnect();
+  const { createNewWallet, markBackupConfirmed, wallets, activePublicKey, isLoading, error, clearError } = useWalletConnect();
 
   const handleSetPassword = () => {
     setLocalError(null);
@@ -62,7 +62,11 @@ export default function WalletCreateScreen({ navigation }: Props) {
     setTimeout(() => setCopied(false), 2000);
   };
 
-  const handleFinish = () => {
+  const handleFinish = async () => {
+    // Mark the active wallet's backup as confirmed if checkbox is checked
+    if (backedUp && activePublicKey) {
+      markBackupConfirmed(activePublicKey, true);
+    }
     navigation.reset({ index: 0, routes: [{ name: 'EmailLogin' as any }] });
   };
 

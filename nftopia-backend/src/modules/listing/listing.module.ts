@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
+import { EventEmitterModule } from '@nestjs/event-emitter';
 import { Listing } from './entities/listing.entity';
 import { ListingService } from './listing.service';
 import { ListingController } from './listing.controller';
@@ -10,6 +11,7 @@ import { TransactionModule } from '../transaction/transaction.module';
 
 @Module({
   imports: [
+    EventEmitterModule,
     TypeOrmModule.forFeature([Listing, StellarNft, NftMetadata]),
     StellarModule,
     TransactionModule,

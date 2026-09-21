@@ -1,18 +1,304 @@
 import { StellarNetwork } from "@/types/stellar";
+import { getNetworkPassphrase } from "@/lib/stellar/client";
+import type { ISignClient, SessionTypes } from "@walletconnect/types";
 
-export async function connectWalletConnect(
-  _network: StellarNetwork
-): Promise<string> {
-  throw new Error(
-    "WalletConnect is not yet implemented. Please use Freighter or Albedo."
+const WC_SESSION_KEY = "stellar_wc_session";
+const DEFAULT_PROJECT_ID = "8a5542a1b9e15f3e99097e3a9c7b2a11";
+
+let signClientInstance: ISignClient | null = null;
+let initPromise: Promise<ISignClient> | null = null;
+
+export interface WalletConnectSessionData {
+  topic: string;
+  address: string;
+  network: StellarNetwork;
+}
+
+export function getWalletConnectProjectId(): string {
+  return (
+    process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID ||
+    DEFAULT_PROJECT_ID
   );
 }
 
-export async function signWithWalletConnect(
-  _transactionXdr: string,
-  _network: StellarNetwork
+export async function getSignClient(): Promise<ISignClient> {
+  if (signClientInstance) {
+    return signClientInstance;
+  }
+
+  if (initPromise) {
+    return initPromise;
+  }
+
+  initPromise = (async () => {
+    try {
+      const { SignClient } = await import("@walletconnect/sign-client");
+      const projectId = getWalletConnectProjectId();
+
+      const client = await SignClient.init({
+        projectId,
+        metadata: {
+          name: "NFTopia",
+          description: "Decentralized NFT Marketplace on Stellar",
+          url: typeof window !== "undefined" ? window.location.origin : "https://nftopia.app",
+          icons: ["https://nftopia.app/icon.png"],
+        },
+      });
+
+      if (typeof (client as any).on === "function") {
+        client.on("session_delete", (event) => {
+          const persisted = getPersistedSession();
+          if (persisted?.topic === event.topic) {
+            clearPersistedSession();
+          }
+        });
+
+        client.on("session_expire", (event) => {
+          const persisted = getPersistedSession();
+          if (persisted?.topic === event.topic) {
+            clearPersistedSession();
+          }
+        });
+      }
+
+      signClientInstance = client;
+      return client;
+    } catch (err: any) {
+      initPromise = null;
+      throw new Error(
+        err?.message ||
+          "Failed to initialize WalletConnect. Please verify NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID in .env.local."
+      );
+    }
+  })();
+
+  return initPromise;
+}
+
+export function getChainForNetwork(network: StellarNetwork): string {
+  return network === "mainnet" ? "stellar:pubnet" : "stellar:testnet";
+}
+
+export function parseStellarAddress(accountString: string): string {
+  const parts = accountString.split(":");
+  return parts[parts.length - 1];
+}
+
+export function getPersistedSession(): WalletConnectSessionData | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw =
+      sessionStorage.getItem(WC_SESSION_KEY) ||
+      localStorage.getItem(WC_SESSION_KEY);
+    if (!raw) return null;
+    return JSON.parse(raw) as WalletConnectSessionData;
+  } catch {
+    return null;
+  }
+}
+
+export function persistSession(data: WalletConnectSessionData): void {
+  if (typeof window === "undefined") return;
+  const json = JSON.stringify(data);
+  sessionStorage.setItem(WC_SESSION_KEY, json);
+  localStorage.setItem(WC_SESSION_KEY, json);
+}
+
+export function clearPersistedSession(): void {
+  if (typeof window === "undefined") return;
+  sessionStorage.removeItem(WC_SESSION_KEY);
+  localStorage.removeItem(WC_SESSION_KEY);
+}
+
+export async function getActiveWCSession(): Promise<SessionTypes.Struct | null> {
+  const client = await getSignClient();
+  const persisted = getPersistedSession();
+
+  if (persisted?.topic) {
+    try {
+      const session = client.session.get(persisted.topic);
+      if (session) return session;
+    } catch {
+      // Session not found in client
+    }
+  }
+
+  const sessions = client.session.values;
+  if (sessions && sessions.length > 0) {
+    return sessions[sessions.length - 1];
+  }
+
+  return null;
+}
+
+export async function connectWalletConnect(
+  network: StellarNetwork,
+  onDisplayUri?: (uri: string) => void
 ): Promise<string> {
-  throw new Error(
-    "WalletConnect transaction signing is not yet implemented."
-  );
+  const client = await getSignClient();
+  const chain = getChainForNetwork(network);
+
+  const requiredNamespaces = {
+    stellar: {
+      methods: ["stellar_signXdr"],
+      chains: [chain],
+      events: [],
+    },
+  };
+
+  try {
+    const connectPromise = client.connect({ requiredNamespaces });
+    const timeoutPromise = new Promise<never>((_, reject) => {
+      setTimeout(() => {
+        reject(
+          new Error(
+            "WalletConnect relay connection timed out. Please check your internet connection or try connecting via a VPN if your regional ISP restricts WalletConnect relay WebSocket traffic."
+          )
+        );
+      }, 30000);
+    });
+
+    const { uri, approval } = await Promise.race([connectPromise, timeoutPromise]);
+
+    if (uri && onDisplayUri) {
+      onDisplayUri(uri);
+    }
+
+    const session = await approval();
+
+    // Extract address from namespaces
+    const stellarNamespace = session.namespaces?.stellar;
+    if (!stellarNamespace || !stellarNamespace.accounts || stellarNamespace.accounts.length === 0) {
+      throw new Error("No Stellar accounts found in approved WalletConnect session.");
+    }
+
+    const fullAccount = stellarNamespace.accounts[0];
+    const address = parseStellarAddress(fullAccount);
+
+    if (!address) {
+      throw new Error("Invalid Stellar address received from WalletConnect.");
+    }
+
+    persistSession({
+      topic: session.topic,
+      address,
+      network,
+    });
+
+    return address;
+  } catch (err: any) {
+    if (err?.message?.includes("User rejected") || err?.code === 5000) {
+      throw new Error("Connection request was rejected in your mobile wallet.");
+    }
+    throw new Error(err?.message || "Failed to establish WalletConnect session.");
+  }
+}
+
+export async function signWithWalletConnect(
+  transactionXdr: string,
+  network: StellarNetwork
+): Promise<string> {
+  const client = await getSignClient();
+  const session = await getActiveWCSession();
+
+  if (!session) {
+    throw new Error("No active WalletConnect session found. Please reconnect your wallet.");
+  }
+
+  const chain = getChainForNetwork(network);
+  const persisted = getPersistedSession();
+  const address = persisted?.address || parseStellarAddress(session.namespaces.stellar?.accounts?.[0] || "");
+  const networkPassphrase = getNetworkPassphrase(network);
+
+  try {
+    const response = await client.request<any>({
+      topic: session.topic,
+      chainId: chain,
+      request: {
+        method: "stellar_signXdr",
+        params: {
+          xdr: transactionXdr,
+          account: address,
+          networkPassphrase,
+        },
+      },
+    });
+
+    if (typeof response === "string") {
+      return response;
+    }
+
+    if (response?.signedTxXdr) {
+      return response.signedTxXdr;
+    }
+
+    if (response?.signedXdr) {
+      return response.signedXdr;
+    }
+
+    if (response?.xdr) {
+      return response.xdr;
+    }
+
+    throw new Error("Invalid response format received from WalletConnect signing request.");
+  } catch (err: any) {
+    if (err?.message?.includes("User rejected") || err?.code === 5000) {
+      throw new Error("Transaction signing was rejected by user.");
+    }
+    throw new Error(err?.message || "WalletConnect signing failed.");
+  }
+}
+
+export async function disconnectWalletConnect(): Promise<void> {
+  try {
+    const client = await getSignClient();
+    const session = await getActiveWCSession();
+
+    if (session) {
+      await client.disconnect({
+        topic: session.topic,
+        reason: {
+          code: 6000,
+          message: "User disconnected session",
+        },
+      });
+    }
+  } catch {
+    // Ignore error if already disconnected
+  } finally {
+    clearPersistedSession();
+  }
+}
+
+export async function isWalletConnectConnected(): Promise<boolean> {
+  try {
+    const session = await getActiveWCSession();
+    return !!session;
+  } catch {
+    return false;
+  }
+}
+
+export async function getWalletConnectAddress(): Promise<string | null> {
+  const persisted = getPersistedSession();
+  if (persisted?.address) return persisted.address;
+
+  const session = await getActiveWCSession();
+  if (!session) return null;
+
+  const fullAccount = session.namespaces?.stellar?.accounts?.[0];
+  if (!fullAccount) return null;
+
+  return parseStellarAddress(fullAccount);
+}
+
+export async function getWalletConnectNetwork(): Promise<StellarNetwork> {
+  const persisted = getPersistedSession();
+  if (persisted?.network) return persisted.network;
+
+  const session = await getActiveWCSession();
+  if (!session) return "testnet";
+
+  const chain = session.namespaces?.stellar?.chains?.[0] || "";
+  return chain.includes("pubnet") ? "mainnet" : "testnet";
 }

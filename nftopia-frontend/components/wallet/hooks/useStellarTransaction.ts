@@ -4,6 +4,7 @@ import { useState, useCallback } from "react";
 import { StellarNetwork, WalletProvider } from "@/types/stellar";
 import { signWithFreighter } from "@/lib/stellar/wallet/freighter";
 import { signWithAlbedo } from "@/lib/stellar/wallet/albedo";
+import { signWithWalletConnect } from "@/lib/stellar/wallet/walletconnect";
 import { getSorobanServer, defaultNetwork, getNetworkPassphrase } from "@/lib/stellar/client";
 
 interface TransactionState {
@@ -35,6 +36,8 @@ export function useStellarTransaction(
           signedXdr = await signWithFreighter(xdr, network);
         } else if (provider === "albedo") {
           signedXdr = await signWithAlbedo(xdr, network);
+        } else if (provider === "walletconnect" || provider === "lobstr") {
+          signedXdr = await signWithWalletConnect(xdr, network);
         } else {
           throw new Error(`Signing with "${provider}" is not supported`);
         }

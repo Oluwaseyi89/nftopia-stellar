@@ -13,7 +13,8 @@ import {
 
 import { stellarWalletService } from '../../services/stellar/wallet.service';
 import { Wallet } from '../../services/stellar/types';
-import { useAuthStore } from '../../stores/authStore';
+import { useWalletConnect } from '@/hooks/useWalletConnect';
+import { useAuth } from '@/hooks/useAuth';
 import { MnemonicConfirmation } from './components/MnemonicConfirmation';
 import { MnemonicDisplay } from './components/MnemonicDisplay';
 
@@ -33,9 +34,8 @@ export const WalletCreateScreen: React.FC<WalletCreateScreenProps> = ({
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const setWalletInStore = useAuthStore(
-    (state) => (state as { setWallet: (w: Wallet | null) => void }).setWallet,
-  );
+  const { importFromMnemonic } = useWalletConnect();
+  const { login } = useAuth();
 
   const generateWallet = useCallback(async () => {
     setLoading(true);
@@ -77,7 +77,15 @@ export const WalletCreateScreen: React.FC<WalletCreateScreenProps> = ({
     setSubmitting(true);
     setError(null);
     try {
-      setWalletInStore(wallet);
+      // Re-derive (not regenerate) from the mnemonic the user just
+      // confirmed they saved — deterministic, so this yields the exact
+      // same keys as `wallet` above, while properly registering it in the
+      // wallet store this time (generateWallet() only previews it).
+      const registeredWallet = await importFromMnemonic(
+        mnemonic,
+        password || undefined,
+      );
+      await login(registeredWallet);
       onComplete?.();
     } catch (err: unknown) {
       const message =

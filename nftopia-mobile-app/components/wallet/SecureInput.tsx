@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, TextInput, StyleSheet, TouchableOpacity } from 'react-native';
+import { View, Text, TextInput, StyleSheet, TouchableOpacity, TextInputProps } from 'react-native';
 import { colors, spacing, borderRadius } from '@/constants/theme';
 
 interface SecureInputProps {
@@ -10,6 +10,12 @@ interface SecureInputProps {
   error?: string | null;
   editable?: boolean;
   testID?: string;
+  /** Label for the return key. Defaults to "done" (single-line secret key). */
+  returnKeyType?: TextInputProps['returnKeyType'];
+  /** Called when the user presses the return key. */
+  onSubmitEditing?: () => void;
+  /** Imperative handle to focus this input from a parent screen. */
+  inputRef?: React.Ref<TextInput>;
 }
 
 export default function SecureInput({
@@ -20,6 +26,9 @@ export default function SecureInput({
   error,
   editable = true,
   testID,
+  returnKeyType = 'done',
+  onSubmitEditing,
+  inputRef,
 }: SecureInputProps) {
   const [isSecure, setIsSecure] = useState(true);
   const [isFocused, setIsFocused] = useState(false);
@@ -36,6 +45,7 @@ export default function SecureInput({
         ]}
       >
         <TextInput
+          ref={inputRef}
           style={styles.input}
           placeholder={placeholder}
           placeholderTextColor={colors.textTertiary}
@@ -45,6 +55,8 @@ export default function SecureInput({
           autoCapitalize="none"
           autoCorrect={false}
           editable={editable}
+          returnKeyType={returnKeyType}
+          onSubmitEditing={onSubmitEditing}
           onFocus={() => setIsFocused(true)}
           onBlur={() => setIsFocused(false)}
           testID={testID}

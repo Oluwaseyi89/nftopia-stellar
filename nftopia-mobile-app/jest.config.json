@@ -1,16 +1,39 @@
 {
   "testEnvironment": "node",
   "transform": {
-    "^.+\\.tsx?$": ["ts-jest", { "tsconfig": { "strict": false } }]
+    "^.+\\.tsx?$": [
+      "ts-jest",
+      { "tsconfig": { "strict": false, "jsx": "react", "esModuleInterop": true } }
+    ]
   },
   "moduleFileExtensions": ["ts", "tsx", "js", "jsx", "json"],
-  "testMatch": ["**/src/services/auth/__tests__/**/*.test.ts"],
+  "testMatch": ["**/__tests__/**/*.test.ts", "**/*.test.ts"],
+  "testPathIgnorePatterns": ["/node_modules/"],
   "collectCoverageFrom": [
-    "src/services/auth/**/*.ts",
-    "!src/services/auth/__tests__/**"
+    "stores/**/*.ts",
+    "lib/zustand/**/*.ts",
+    "src/services/stellar/**/*.ts",
+    "!**/__tests__/**"
   ],
+  "coverageThreshold": {
+    "global": {
+      "branches": 50,
+      "functions": 60,
+      "lines": 65,
+      "statements": 65
+    }
+  },
   "moduleNameMapper": {
-    "^expo-secure-store$": "<rootDir>/src/services/auth/__mocks__/expo-secure-store.ts"
+    "^@react-native-async-storage/async-storage$": "<rootDir>/src/test-mocks/async-storage.ts",
+    "^expo-secure-store$": "<rootDir>/src/services/auth/__mocks__/expo-secure-store.ts",
+    "^@/components/(.*)$": "<rootDir>/components/$1",
+    "^@/screens/(.*)$": "<rootDir>/screens/$1",
+    "^@/navigation/(.*)$": "<rootDir>/navigation/$1",
+    "^@/stores/(.*)$": "<rootDir>/stores/$1",
+    "^@/types/(.*)$": "<rootDir>/types/$1",
+    "^@/lib/(.*)$": "<rootDir>/lib/$1",
+    "^@/services/(.*)$": "<rootDir>/src/services/$1",
+    "^@/(.*)$": "<rootDir>/$1"
   },
   "transformIgnorePatterns": [
     "node_modules/(?!(stellar-hd-wallet)/)"

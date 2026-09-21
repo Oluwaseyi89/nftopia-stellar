@@ -104,3 +104,33 @@ jobs:
           else
             npm run build --if-present
           fi
+
+  distribute:
+    needs: build-and-verify
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./nftopia-mobile-app
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+      - name: Require EAS credentials
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+        run: test -n "$EXPO_TOKEN" || (echo 'EXPO_TOKEN is required for EAS distribution' >&2; exit 1)
+      - name: Publish OTA update
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+          EXPO_PROJECT_ID: ${{ secrets.EXPO_PROJECT_ID }}
+          GITHUB_SHA: ${{ github.sha }}
+        run: npx eas-cli@latest update --non-interactive --channel ${{ github.ref_name == 'main' && 'production' || 'preview' }} --message "${GITHUB_SHA}"
+      - name: Build production binaries
+        if: github.ref_name == 'main'
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+          EXPO_PROJECT_ID: ${{ secrets.EXPO_PROJECT_ID }}
+          GITHUB_SHA: ${{ github.sha }}
+        run: npx eas-cli@latest build --non-interactive --platform all --profile production --message "${GITHUB_SHA}"

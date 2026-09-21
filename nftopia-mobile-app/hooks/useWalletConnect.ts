@@ -8,6 +8,7 @@ export function useWalletConnect() {
   const balances = useWalletStore((s) => s.balances);
   const isLoading = useWalletStore((s) => s.isLoading);
   const error = useWalletStore((s) => s.error);
+  const lastBackupReminderShown = useWalletStore((s) => s.lastBackupReminderShown);
 
   const activeWallet = wallets.find((w) => w.publicKey === activePublicKey) ?? null;
   const activeBalance = activePublicKey ? balances[activePublicKey] ?? null : null;
@@ -21,6 +22,8 @@ export function useWalletConnect() {
   const fetchBalances = useWalletStore((s) => s.fetchBalances);
   const revealSecretKey = useWalletStore((s) => s.revealSecretKey);
   const revealMnemonic = useWalletStore((s) => s.revealMnemonic);
+  const markBackupConfirmed = useWalletStore((s) => s.markBackupConfirmed);
+  const updateLastReminderShown = useWalletStore((s) => s.updateLastReminderShown);
   const clearError = useWalletStore((s) => s.clearError);
 
   return {
@@ -31,6 +34,7 @@ export function useWalletConnect() {
     activeBalance,
     isLoading,
     error,
+    lastBackupReminderShown,
     importFromSecretKey,
     importFromMnemonic,
     createNewWallet,
@@ -40,6 +44,8 @@ export function useWalletConnect() {
     fetchBalances: (pubKey?: string) => fetchBalances(pubKey),
     revealSecretKey,
     revealMnemonic,
+    markBackupConfirmed,
+    updateLastReminderShown,
     clearError,
   };
 }

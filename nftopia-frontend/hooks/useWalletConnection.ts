@@ -29,12 +29,28 @@ export function useWalletConnection() {
         } catch {
           setDisconnected();
         }
+      } else if (provider === "walletconnect" || provider === "lobstr") {
+        try {
+          const { isWalletConnectConnected, getWalletConnectAddress } = await import(
+            "@/lib/stellar/wallet/walletconnect"
+          );
+          const stillConnected = await isWalletConnectConnected();
+          if (!stillConnected) {
+            setDisconnected();
+            return;
+          }
+          const currentAddress = await getWalletConnectAddress();
+          if (currentAddress && currentAddress !== address) {
+            setConnected(currentAddress, provider, useWalletStore.getState().network);
+          }
+        } catch {
+          setDisconnected();
+        }
       }
-      
     };
 
     validateSession();
-  }, []); 
+  }, [address, connected, provider, setConnected, setDisconnected]); 
 
   // Poll Freighter connection status
   useEffect(() => {

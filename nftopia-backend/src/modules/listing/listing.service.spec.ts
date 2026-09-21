@@ -6,6 +6,7 @@ import {
   UnauthorizedException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { CreateListingDto } from './dto/create-listing.dto';
@@ -93,6 +94,10 @@ describe('ListingService', () => {
     createAndExecuteBundlePurchase: jest.fn(),
   };
 
+  const eventEmitter = {
+    emit: jest.fn(),
+  };
+
   beforeEach(async () => {
     jest.clearAllMocks();
     configService.get.mockReturnValue(false);
@@ -105,11 +110,16 @@ describe('ListingService', () => {
         { provide: ConfigService, useValue: configService },
         { provide: MarketplaceSettlementClient, useValue: settlementClient },
         { provide: TransactionService, useValue: transactionService },
+        { provide: EventEmitter2, useValue: eventEmitter },
       ],
     }).compile();
 
     service = module.get<ListingService>(ListingService);
   });
+
+  /** setImmediate-queued work (the emitListingCreated call) runs after this resolves. */
+  const flushSetImmediate = () =>
+    new Promise((resolve) => setImmediate(resolve));
 
   it('creates listing in legacy DB mode', async () => {
     const dto: CreateListingDto = {
@@ -119,6 +129,7 @@ describe('ListingService', () => {
       currency: 'XLM',
     };
     const listing = {
+      id: 'listing-1',
       ...dto,
       sellerId: 'seller-1',
       status: ListingStatus.ACTIVE,
@@ -206,6 +217,74 @@ describe('ListingService', () => {
         currency: 'XLM',
       }),
     );
+  });
+
+  it('emits listing.created off the critical path in legacy DB mode', async () => {
+    const dto: CreateListingDto = {
+      nftContractId: 'C1',
+      nftTokenId: '1',
+      price: 15,
+      currency: 'XLM',
+    };
+    const listing = {
+      id: 'listing-1',
+      ...dto,
+      sellerId: 'seller-1',
+      status: ListingStatus.ACTIVE,
+    };
+
+    listingRepo.findOne.mockResolvedValue(null);
+    nftRepo.findOne.mockResolvedValue({ contractId: 'C1', tokenId: '1' });
+    listingRepo.create.mockReturnValue(listing);
+    listingRepo.save.mockResolvedValue(listing);
+
+    const result = await service.create(dto, 'seller-1');
+
+    // Not emitted yet: emission is deferred to a setImmediate, off the
+    // request's critical path, so it must not have fired synchronously.
+    expect(result).toEqual(listing);
+    expect(eventEmitter.emit).not.toHaveBeenCalled();
+
+    await flushSetImmediate();
+
+    expect(eventEmitter.emit).toHaveBeenCalledWith('listing.created', {
+      listingId: 'listing-1',
+      sellerId: 'seller-1',
+      nftContractId: 'C1',
+      nftTokenId: '1',
+    });
+  });
+
+  it('emits listing.created with the on-chain sale id in onchain mode', async () => {
+    configService.get.mockImplementation((key: string) =>
+      key === 'ENABLE_ONCHAIN_SETTLEMENT' ? true : undefined,
+    );
+    settlementClient.createSale.mockResolvedValue(42);
+
+    const dto: CreateListingDto = {
+      nftContractId: 'C2',
+      nftTokenId: '2',
+      price: 25,
+      currency: 'USDC',
+    };
+
+    listingRepo.create.mockImplementation(
+      (payload: Partial<Listing>) => payload,
+    );
+
+    const result = await service.create(dto, 'seller-2');
+
+    expect(result).toBeDefined();
+    expect(eventEmitter.emit).not.toHaveBeenCalled();
+
+    await flushSetImmediate();
+
+    expect(eventEmitter.emit).toHaveBeenCalledWith('listing.created', {
+      listingId: '42',
+      sellerId: 'seller-2',
+      nftContractId: 'C2',
+      nftTokenId: '2',
+    });
   });
 
   it('rejects non-positive price', async () => {

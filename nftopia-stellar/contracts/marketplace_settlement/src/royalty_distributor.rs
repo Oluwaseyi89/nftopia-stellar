@@ -1,12 +1,17 @@
 use crate::error::SettlementError;
-use crate::events::{emit_royalties_distributed, RoyaltiesDistributedEvent};
-use crate::types::{Asset, DistributionResult, RoyaltyDistribution};
+use crate::events::{
+    emit_royalties_distributed, emit_royalty_cap_updated, RoyaltiesDistributedEvent,
+};
+use crate::types::{
+    validate_royalty_percentage, Asset, DistributionResult, RoyaltyDistribution, MAX_ROYALTY_BPS,
+};
 use crate::utils::asset_utils;
 use crate::utils::math_utils;
 use soroban_sdk::{contracttype, symbol_short, Address, Bytes, Env, Map, Symbol, Vec};
 
 // Storage keys
 const ROYALTY_CONFIGS: Symbol = symbol_short!("roy_cfgs");
+pub(crate) const ADMIN_CONFIG_KEY: Symbol = symbol_short!("admin_cfg");
 
 // Type alias for royalty key
 type RoyaltyKey = Bytes;
@@ -22,10 +27,60 @@ pub struct RoyaltyInfo {
     pub last_updated: u64,
 }
 
+/// Admin configuration for the marketplace
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct AdminConfig {
+    pub admin: Address,
+    pub emergency_withdrawal_enabled: bool,
+    pub max_transaction_duration: u64,
+    pub max_auction_duration: u64,
+    pub min_bid_increment_bps: u64, // Minimum bid increment in basis points
+    pub max_royalty_percentage: u64, // Maximum royalty percentage (admin-configured cap)
+    pub dispute_cooling_period: u64, // Cooling period before dispute resolution
+    pub arbitration_quorum: u64,    // Required votes for arbitration
+}
+
 /// Royalty distributor for handling royalty payments
 pub struct RoyaltyDistributor;
 
 impl RoyaltyDistributor {
+    /// Get the admin configuration from storage.
+    ///
+    /// # Returns
+    /// * `Ok(AdminConfig)` if found
+    /// * `Err(SettlementError::NotFound)` if not configured
+    fn get_admin_config(env: &Env) -> Result<AdminConfig, SettlementError> {
+        env.storage()
+            .instance()
+            .get(&ADMIN_CONFIG_KEY)
+            .ok_or(SettlementError::NotFound)
+    }
+
+    /// Get the admin-configured max royalty percentage.
+    ///
+    /// # Returns
+    /// * The admin-configured cap, or DEFAULT_MAX_ROYALTY_PERCENTAGE if not set
+    fn get_admin_max_royalty(env: &Env) -> u64 {
+        Self::get_admin_config(env)
+            .map(|cfg| cfg.max_royalty_percentage)
+            .unwrap_or(crate::types::DEFAULT_MAX_ROYALTY_PERCENTAGE)
+    }
+
+    /// Validate royalty percentage against both hard cap and admin cap.
+    ///
+    /// # Arguments
+    /// * `percentage` - The royalty percentage to validate
+    /// * `env` - The Soroban environment
+    ///
+    /// # Returns
+    /// * `Ok(())` if valid
+    /// * `Err(SettlementError)` if invalid
+    fn validate_royalty(percentage: u64, env: &Env) -> Result<(), SettlementError> {
+        let admin_cap = Self::get_admin_max_royalty(env);
+        validate_royalty_percentage(percentage, admin_cap)
+    }
+
     /// Calculate royalties for an NFT sale.
     /// Royalty is calculated on the full sale price, then seller and platform
     /// fees are calculated only on the post-royalty remainder.
@@ -34,6 +89,7 @@ impl RoyaltyDistributor {
         nft_contract: &Address,
         token_id: u64,
         sale_price: i128,
+        platform_fee: i128,
         seller: &Address,
         platform_address: &Address,
     ) -> Result<RoyaltyDistribution, SettlementError> {
@@ -43,22 +99,38 @@ impl RoyaltyDistributor {
         let royalty_amount =
             math_utils::calculate_percentage(sale_price, royalty_info.royalty_percentage, env)?;
 
-        // Post-royalty remainder: seller and platform split only this amount
+        if platform_fee < 0 {
+            return Err(SettlementError::InvalidAmount);
+        }
+
         let remainder = math_utils::safe_sub(sale_price, royalty_amount, env)?;
-
-        let seller_percentage = 9500u64; // 95% of remainder
-        let platform_percentage = 500u64; // 5% of remainder
-
-        // Platform fee calculated on the remainder (not the full sale price)
-        let platform_amount =
-            math_utils::calculate_percentage(remainder, platform_percentage, env)?;
-        let seller_amount = math_utils::safe_sub(remainder, platform_amount, env)?;
+        let seller_amount = math_utils::safe_sub(remainder, platform_fee, env)?;
+        let platform_percentage = if sale_price > 0 {
+            ((platform_fee * 10_000) / sale_price) as u64
+        } else {
+            0
+        };
+        let seller_percentage = 10_000u64
+            .saturating_sub(royalty_info.royalty_percentage)
+            .saturating_sub(platform_percentage);
 
         // Add all amounts to the distribution map
         let mut amounts = Map::new(env);
-        amounts.set(royalty_info.creator.clone(), royalty_amount);
-        amounts.set(seller.clone(), seller_amount);
-        amounts.set(platform_address.clone(), platform_amount);
+        let creator_total = math_utils::safe_add(
+            amounts.get(royalty_info.creator.clone()).unwrap_or(0),
+            royalty_amount,
+            env,
+        )?;
+        amounts.set(royalty_info.creator.clone(), creator_total);
+        let seller_total =
+            math_utils::safe_add(amounts.get(seller.clone()).unwrap_or(0), seller_amount, env)?;
+        amounts.set(seller.clone(), seller_total);
+        let platform_total = math_utils::safe_add(
+            amounts.get(platform_address.clone()).unwrap_or(0),
+            platform_fee,
+            env,
+        )?;
+        amounts.set(platform_address.clone(), platform_total);
 
         Ok(RoyaltyDistribution {
             creator_address: royalty_info.creator,
@@ -80,22 +152,37 @@ impl RoyaltyDistributor {
         transaction_id: u64,
         royalty_distribution: &RoyaltyDistribution,
         payment_asset: &Asset,
+        platform_fee: i128,
     ) -> Result<DistributionResult, SettlementError> {
         // Validate distribution sums before any transfer
         Self::validate_royalty_distribution(env, royalty_distribution)?;
 
         let mut total_distributed = 0i128;
 
-        // Distribute to each recipient — fail entire tx if any transfer fails
+        // Keep the platform share in contract escrow for FeeManager withdrawal.
         for (recipient, amount) in royalty_distribution.amounts.iter() {
+            let transfer_amount = if recipient == royalty_distribution.platform_address {
+                math_utils::safe_sub(amount, platform_fee, env)?
+            } else {
+                amount
+            };
+            if transfer_amount == 0 {
+                continue;
+            }
             asset_utils::transfer_tokens(
-                &payment_asset.contract,
+                payment_asset,
                 &env.current_contract_address(),
                 &recipient,
-                amount,
+                transfer_amount,
                 env,
             )?;
-            total_distributed = math_utils::safe_add(total_distributed, amount, env)?;
+            total_distributed = math_utils::safe_add(total_distributed, transfer_amount, env)?;
+        }
+
+        let expected_distribution =
+            math_utils::safe_sub(royalty_distribution.total_amount, platform_fee, env)?;
+        if total_distributed != expected_distribution {
+            return Err(SettlementError::RoyaltyDistributionFailed);
         }
 
         // Look up amounts from the distribution map using stored addresses
@@ -107,10 +194,7 @@ impl RoyaltyDistributor {
             .amounts
             .get(royalty_distribution.seller_address.clone())
             .unwrap_or(0);
-        let platform_amount = royalty_distribution
-            .amounts
-            .get(royalty_distribution.platform_address.clone())
-            .unwrap_or(0);
+        let platform_amount = platform_fee;
 
         let result = DistributionResult {
             transaction_id,
@@ -139,7 +223,8 @@ impl RoyaltyDistributor {
         Ok(result)
     }
 
-    /// Set royalty information for an NFT
+    /// Set royalty information for an NFT.
+    /// Validates against both hard cap and admin-configured cap.
     pub fn set_royalty_info(
         env: &Env,
         nft_contract: &Address,
@@ -148,10 +233,8 @@ impl RoyaltyDistributor {
         royalty_percentage: u64,
         _setter: &Address,
     ) -> Result<(), SettlementError> {
-        // Validate royalty percentage (max 50%)
-        if royalty_percentage > 5000 {
-            return Err(SettlementError::InvalidRoyaltyPercentage);
-        }
+        // Validate against both hard cap and admin cap
+        Self::validate_royalty(royalty_percentage, env)?;
 
         let royalty_info = RoyaltyInfo {
             nft_contract: nft_contract.clone(),
@@ -184,7 +267,8 @@ impl RoyaltyDistributor {
         }
     }
 
-    /// Update royalty percentage for an NFT
+    /// Update royalty percentage for an NFT.
+    /// Validates against both hard cap and admin-configured cap.
     pub fn update_royalty_percentage(
         env: &Env,
         nft_contract: &Address,
@@ -199,10 +283,8 @@ impl RoyaltyDistributor {
             return Err(SettlementError::Unauthorized);
         }
 
-        // Validate new percentage
-        if new_percentage > 5000 {
-            return Err(SettlementError::InvalidRoyaltyPercentage);
-        }
+        // Validate new percentage against both hard cap and admin cap
+        Self::validate_royalty(new_percentage, env)?;
 
         royalty_info.royalty_percentage = new_percentage;
         royalty_info.last_updated = env.ledger().timestamp();
@@ -213,6 +295,7 @@ impl RoyaltyDistributor {
 
     /// Calculate royalty splits for complex transactions (bundles).
     /// Uses value-proportional splitting based on `value_weights` rather than equal division.
+    /// Validates all royalty percentages against caps.
     pub fn calculate_complex_royalties(
         env: &Env,
         nft_contracts: &Vec<Address>,
@@ -332,7 +415,8 @@ impl RoyaltyDistributor {
         }
     }
 
-    /// Bulk set royalties for multiple NFTs
+    /// Bulk set royalties for multiple NFTs.
+    /// Validates all percentages against caps before applying any.
     pub fn bulk_set_royalties(
         env: &Env,
         nft_contract: &Address,
@@ -341,6 +425,10 @@ impl RoyaltyDistributor {
         royalty_percentage: u64,
         setter: &Address,
     ) -> Result<(), SettlementError> {
+        // Pre-validate the royalty percentage once for all tokens
+        Self::validate_royalty(royalty_percentage, env)?;
+
+        // Then apply to all tokens
         for token_id in token_ids.iter() {
             Self::set_royalty_info(
                 env,
@@ -351,6 +439,51 @@ impl RoyaltyDistributor {
                 setter,
             )?;
         }
+        Ok(())
+    }
+
+    /// Update the admin-configured max royalty percentage.
+    ///
+    /// # Authorization
+    /// Only the current admin can call this function.
+    ///
+    /// # Validation
+    /// - New cap must be <= MAX_ROYALTY_BPS (hard cap)
+    /// - New cap can be increased or decreased (but never above hard cap)
+    ///
+    /// # Events
+    /// Emits `RoyaltyCapUpdated` event on success.
+    ///
+    /// # Returns
+    /// * `Ok(())` if the cap was successfully updated
+    /// * `Err(SettlementError::NotAdmin)` if caller is not admin
+    /// * `Err(SettlementError::InvalidRoyaltyPercentage)` if new cap exceeds hard cap
+    pub fn update_max_royalty_percentage(
+        env: &Env,
+        caller: &Address,
+        new_cap: u64,
+    ) -> Result<(), SettlementError> {
+        let mut config = Self::get_admin_config(env)?;
+
+        // Authorization: only admin can update the cap
+        if caller != &config.admin {
+            return Err(SettlementError::NotAdmin);
+        }
+
+        // Validate new cap against hard cap
+        if new_cap > MAX_ROYALTY_BPS {
+            return Err(SettlementError::InvalidRoyaltyPercentage);
+        }
+
+        let old_cap = config.max_royalty_percentage;
+        config.max_royalty_percentage = new_cap;
+
+        // Store updated config
+        env.storage().instance().set(&ADMIN_CONFIG_KEY, &config);
+
+        // Emit event for the cap update
+        emit_royalty_cap_updated(env, old_cap, new_cap);
+
         Ok(())
     }
 
@@ -396,6 +529,7 @@ impl RoyaltyEnforcer {
             nft_contract,
             token_id,
             sale_price,
+            0,
             seller,
             platform_address,
         )?;
@@ -426,7 +560,8 @@ impl RoyaltyEnforcer {
         Ok(true)
     }
 
-    /// Calculate minimum price needed to cover royalties
+    /// Calculate minimum price needed to cover royalties.
+    /// Respects the max royalty cap in calculations.
     pub fn calculate_minimum_price(
         env: &Env,
         nft_contract: &Address,
@@ -434,6 +569,17 @@ impl RoyaltyEnforcer {
         desired_net_amount: i128,
     ) -> Result<i128, SettlementError> {
         let royalty_info = RoyaltyDistributor::get_royalty_info(env, nft_contract, token_id)?;
+
+        // Get admin cap for validation
+        let admin_cap = RoyaltyDistributor::get_admin_max_royalty(env);
+
+        // Ensure royalty percentage doesn't exceed caps (should already be validated)
+        if royalty_info.royalty_percentage > admin_cap {
+            return Err(SettlementError::RoyaltyExceedsMaxCap);
+        }
+        if royalty_info.royalty_percentage > MAX_ROYALTY_BPS {
+            return Err(SettlementError::InvalidRoyaltyPercentage);
+        }
 
         // Price = desired_net_amount / (1 - royalty_percentage)
         let royalty_decimal = royalty_info.royalty_percentage as i128;

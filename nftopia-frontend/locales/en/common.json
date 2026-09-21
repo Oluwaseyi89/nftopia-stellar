@@ -10,6 +10,20 @@
     "connectWallet": "Connect Wallet",
     "language": "Language"
   },
+  "walletModal": {
+    "title": "Connect Wallet",
+    "subtitle": "Choose a Stellar wallet to connect. Freighter is recommended for browser use.",
+    "scanTitle": "Scan with Mobile Wallet",
+    "scanInstructions": "Open LOBSTR or any WalletConnect-compatible Stellar wallet, scan the QR code, and approve the connection.",
+    "copyPairingCode": "Copy Pairing Code",
+    "copied": "Copied!",
+    "generatingQr": "Generating QR code…",
+    "waitingApproval": "Waiting for wallet approval…",
+    "backToWallets": "Back to wallets",
+    "tryAgain": "Try Again",
+    "connectionFailed": "Connection Failed",
+    "poweredBy": "Secured by Stellar blockchain"
+  },
   "auth": {
     "signIn": "Sign In",
     "signUp": "Sign Up",
