@@ -1,6 +1,6 @@
 # nftopia-mobile-app — Issue Backlog (source file)
 
-134 minimal issue entries (of an original 150) generated from a direct audit of the current `nftopia-mobile-app/` codebase (2026-09-21). Each entry is a candidate for expansion into a full GitHub issue following the repo's established template (Summary / Discord link / Problem Statement with real file references / Required Changes / Acceptance Criteria / Directory). 8 entries were used to create GitHub issues #543-#550 and removed; a few additional entries in the original "Auth & Session Backend Integration" section cited specific `authStore.ts` line numbers/TODO comments that did not actually exist in the file (verified false on a follow-up read — that file has no TODO comments at all) and were corrected/removed rather than carried into a public issue.
+123 minimal issue entries (of an original 150) generated from a direct audit of the current `nftopia-mobile-app/` codebase (2026-09-21). Each entry is a candidate for expansion into a full GitHub issue following the repo's established template (Summary / Discord link / Problem Statement with real file references / Required Changes / Acceptance Criteria / Directory). 8 entries were used to create GitHub issues #543-#550 and removed; a few additional entries in the original "Auth & Session Backend Integration" section cited specific `authStore.ts` line numbers/TODO comments that did not actually exist in the file (verified false on a follow-up read — that file has no TODO comments at all) and were corrected/removed rather than carried into a public issue. 11 further entries were used to create GitHub issues #665-#676 (of that batch's 12 issues, one — the missing `CollectionDetail` route — was a bonus finding during verification, never a literal line here).
 
 Do **not** duplicate the 10 still-open mobile-app issues: #399 (secure token storage + biometric), #455 (Receive/QR), #456 (QR scanner), #466 (native share), #467 (haptics), #468 (form input library), #469 (bottom sheet), #470 (currency conversion), #471 (fee estimation), #472 (empty/error states) — those remain the active backlog and are excluded from this file. The other 58 mobile-app issues are closed/implemented; entries below build on top of that work rather than repeating it.
 
@@ -8,9 +8,6 @@ When a title from this file is used to create a real GitHub issue, remove its li
 
 ## AI Assistant Chat UI
 
-- [ ] **Add AI usage summary display consuming `GET /ai/usage`** — no screen shows the user their AI chat usage/quota from `AiUsageService`. _(kind: mobile-app, Typescript)_
-- [ ] **Add AI chat entry point to Home and Marketplace screens** — no discoverable affordance (FAB/button) launches the assistant from `HomeScreen.tsx` or `MarketplaceScreen.tsx`. _(kind: mobile-app, enhancement)_
-- [ ] **Add AI chat session persistence across app restarts** — no local store mirrors backend `chat-session.service.ts` sessions so a resumed app loses chat history. _(kind: mobile-app, Typescript)_
 - [ ] **Add AI chat message list with markdown/tool-result rendering** — assistant replies from `marketplace.tools.ts` may include structured NFT/listing data with no dedicated rendering component. _(kind: mobile-app, React-Native)_
 - [ ] **Add AI chat rate-limit and error UI** — backend's `AiChatRateLimitGuard` can 429; no mobile handling surfaces a friendly retry-after message. _(kind: mobile-app, bug, enhancement)_
 - [ ] **Add AI chat health indicator using `GET /ai/health`** — no UI reflects `AiAgentHealthService` down/unconfigured states before a user starts typing. _(kind: mobile-app, Typescript)_
@@ -19,16 +16,12 @@ When a title from this file is used to create a real GitHub issue, remove its li
 
 ## Navigation Wiring & Dead Screens
 
-- [ ] **Register `TransactionHistoryScreen` in `MainNavigator.tsx`** — `screens/Wallet/TransactionHistoryScreen.tsx` exists with no route or entry point from `WalletManagementScreen.tsx`/`HomeScreen.tsx`. _(kind: mobile-app, bug)_
-- [ ] **Register `AddressBookScreen` in `MainNavigator.tsx` and link it from `SendScreen`** — `screens/Wallet/AddressBookScreen.tsx` and `screens/Wallet/components/RecipientPicker.tsx` exist but `Send` route only points to `SendScreen`. _(kind: mobile-app, bug)_
-- [ ] **Register `CreatorProfileScreen` in `MainNavigator.tsx`** — `screens/Profile/CreatorProfileScreen.tsx` exists with no route or link from `ProfileScreen.tsx`/NFT detail creator link. _(kind: mobile-app, bug)_
 - [ ] **Register `BackupReminderScreen` as a route and confirm `BackupReminderManager.tsx` triggers navigation to it** — verify the manager component actually pushes this screen rather than only rendering inline. _(kind: mobile-app, bug)_
 - [ ] **Register `AppLockScreen` as the true navigation root when locked** — confirm `AppLockManager.tsx` renders `screens/Auth/AppLockScreen.tsx` as a blocking overlay/route rather than a component that could be bypassed by direct navigation. _(kind: mobile-app, bug)_
 - [ ] **Add an E2E smoke test asserting every screen file has a reachable navigation path** — write a lightweight script/test enumerating `screens/**/*Screen.tsx` and cross-checking against registered route names, to prevent future dead screens. _(kind: mobile-app, test)_
 
 ## Auth & Session Backend Integration
 
-- [ ] **Implement registration backend call in `EmailRegisterScreen.tsx`** — `screens/Auth/EmailRegisterScreen.tsx:82` has `// TODO: Implement actual registration logic with backend`. _(kind: mobile-app, bug)_
 - [ ] **Add integration tests for the full login → token-refresh → logout lifecycle** — no test exercises `authStore.ts` against a mocked backend end-to-end once the TODOs above are resolved. _(kind: mobile-app, test)_
 - [ ] **Audit and unify wallet service layer duplication between `src/services/stellar/` and any newer wallet code paths** — confirm `SendScreen.tsx`, `AddressBookScreen.tsx`, and `TransactionHistoryScreen.tsx` all use the same canonical `wallet.service.ts` rather than diverging copies. _(kind: mobile-app, bug)_
 
@@ -111,7 +104,6 @@ When a title from this file is used to create a real GitHub issue, remove its li
 
 ## Notifications
 
-- [ ] **Wire `NotificationsScreen.tsx` to real backend notification data** — confirm it consumes actual push/in-app notification history rather than local-only test data from `PushNotificationTestScreen.tsx`. _(kind: mobile-app, bug)_
 - [ ] **Add mark-as-read/unread and swipe-to-dismiss to `NotificationsScreen.tsx`** — confirm per-notification state management exists in `stores/notificationStore.ts`. _(kind: mobile-app, enhancement)_
 - [ ] **Add deep-link-on-tap for each notification type** — confirm tapping a bid/sale/follow notification routes to the relevant `AuctionDetailScreen`/`NFTDetailScreen`/`CreatorProfileScreen` via `src/navigation/linking.config.ts`. _(kind: mobile-app, bug)_
 - [ ] **Add notification badge count to the tab bar/app icon** — confirm unread count from `stores/notificationStore.ts` surfaces on the OS badge (`expo-notifications` badge API) and in-app tab indicator. _(kind: mobile-app, enhancement)_
@@ -124,7 +116,6 @@ When a title from this file is used to create a real GitHub issue, remove its li
 
 ## Social & Profile
 
-- [ ] **Wire `CreatorProfileScreen.tsx` to `GET /social` follow/follower/activity endpoints** — confirm followers, following, and activity feed pull from the real backend social module once the screen is registered in navigation. _(kind: mobile-app, bug)_
 - [ ] **Add follow/unfollow button to `CreatorProfileScreen.tsx`** — wire `POST`/`DELETE /social/users/:id/follow`. _(kind: mobile-app, enhancement)_
 - [ ] **Add creator suggestions section using `GET /social/suggestions`** — no mobile UI surfaces suggested creators to follow. _(kind: mobile-app, enhancement)_
 - [ ] **Add mutual-followers display using `GET /social/mutual/:id`** — no UI shows "followed by X and Y others" on `CreatorProfileScreen.tsx`. _(kind: mobile-app, enhancement)_
@@ -137,8 +128,6 @@ When a title from this file is used to create a real GitHub issue, remove its li
 
 ## State Management Test Coverage & Store Hardening
 
-- [ ] **Add unit tests for `stores/offlineStore.ts`** — no `__tests__/offlineStore.test.ts` exists despite this store underpinning offline support. _(kind: mobile-app, test)_
-- [ ] **Add unit tests for `stores/preferencesStore.ts`** — no test covers persisted user preferences (theme/currency/notifications). _(kind: mobile-app, test)_
 - [ ] **Add unit tests for `stores/toastStore.ts`** — no test covers the toast queue/auto-dismiss logic backing `components/Toast.tsx`/`src/components/Toast.tsx`. _(kind: mobile-app, test)_
 - [ ] **Audit `stores/` vs `src/stores/` vs `lib/zustand/` for further duplicated state** — beyond auth/address-book/toast, confirm no other store has a stale duplicate across these three locations. _(kind: mobile-app, bug)_
 - [ ] **Document the canonical store location convention** — add a short section to the mobile app README clarifying `stores/` is canonical (or whichever is chosen) so new stores aren't added to the wrong directory. _(kind: mobile-app, documentation)_

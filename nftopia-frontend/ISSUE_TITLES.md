@@ -4,22 +4,17 @@ Minimal issue titles + one-line descriptions, grouped by concern, generated from
 
 Note: the Starknet-to-Stellar migration is already effectively complete (only one stale type reference remains) — this corrects an outdated claim in the repo root's `NEW_ISSUES.md`.
 
-Total entries: 137 (13 entries used to create GitHub issues #535-#542 and #576-#580 have been removed to avoid duplication)
+Total entries: 125 (25 entries used to create GitHub issues #535-#542, #576-#580, and #653-#664 have been removed to avoid duplication)
 
 ## Legacy Starknet Cleanup (2)
 - [ ] **Remove stale Starknet type references from `lib/stores/types.ts`** — Migration to `@stellar/stellar-sdk`/Freighter is otherwise complete; one leftover Starknet-named type/comment remains. (frontend, Typescript)
 - [ ] **Audit wallet store naming for Starknet-era leftovers** — Confirm no other store/util still names things after the old Starknet integration post-migration. (frontend, Typescript)
 
 ## AI Assistant Chat (7)
-- [ ] **Add AI usage/quota display sourced from `GET /ai/usage`** — Users have no visibility into their remaining AI chat quota. (frontend)
-- [ ] **Add graceful degraded state when `GET /ai/health` reports down/unconfigured** — Chat widget should show a clear unavailable state instead of a broken request. (frontend)
 - [ ] **Add AI chat entry point to the global layout** — Decide and implement where the assistant is surfaced (floating button, marketplace sidebar, etc.). (frontend, Next.js)
-- [ ] **Add AI chat conversation history UI** — Backend tracks `sessionId`-scoped history; no UI lets a user resume or browse past sessions. (frontend)
 - [ ] **Add AI chat accessibility support (screen reader live region for streamed replies)** — Streaming text needs ARIA live-region handling so screen readers don't read every token. (frontend)
 
 ## Marketplace Browsing & Discovery (7)
-- [ ] **Add category-based discovery landing sections to the marketplace home** — Confirm dedicated category browsing exists beyond search/filter, matching the mobile discovery work. (frontend)
-- [ ] **Add recently viewed NFTs tracking on web** — No equivalent to the mobile `recentlyViewedStore` concept found in `lib/stores`. (frontend)
 - [ ] **Add saved/marketplace filter presets** — Users can filter but cannot save a filter combination for reuse. (frontend)
 - [ ] **Add infinite-scroll virtualization for large marketplace result sets** — Confirm large listings pages use windowing/virtualization, not full DOM render. (frontend)
 - [ ] **Add marketplace empty-state variants for zero-results-after-filter vs. zero-listings** — Confirm these two states are visually distinct, matching the mobile empty-state pattern. (frontend)
@@ -48,14 +43,12 @@ Total entries: 137 (13 entries used to create GitHub issues #535-#542 and #576-#
 - [ ] **Add A/B-tested onboarding checklist for first-time creators** — Confirm new creators get a guided setup flow, tying into existing `lib/experiments`. (frontend)
 
 ## Wallet & Auth (5)
-- [ ] **Add WalletConnect session management UI (view/revoke connected dApp sessions)** — `@walletconnect/sign-client` is installed; confirm a UI exists to manage active sessions. (frontend)
 - [ ] **Add multi-wallet switching UI for users with several connected wallets** — Confirm the wallet store supports and surfaces switching, not just a single active wallet. (frontend)
 - [ ] **Add session expiry warning modal mirroring the mobile app's planned equivalent** — Keep auth UX consistent between mobile and web. (frontend)
 - [ ] **Add Albedo wallet connection error handling and retry UI** — `@albedo-link/intent` integration should have clear failure/retry states. (frontend)
 - [ ] **Add hardware wallet (Ledger) support evaluation and UI stub** — No hardware wallet path confirmed; scope and document feasibility. (frontend)
 
 ## Personalization & Social (5)
-- [ ] **Add follow/unfollow button and follower count to creator public profile** — Confirm the public profile page surfaces backend's `social` module endpoints. (frontend, graphql)
 - [ ] **Add activity feed UI consuming `GET feed`** — Confirm a personalized activity feed page/widget exists on the frontend. (frontend, graphql)
 - [ ] **Add creator suggestions widget consuming `GET suggestions`** — No 'creators you might like' surfaced on the frontend yet. (frontend)
 - [ ] **Add block/mute user UI once backend supports it** — Placeholder UI for a future block/mute capability distinct from unfollow. (frontend)
@@ -63,24 +56,20 @@ Total entries: 137 (13 entries used to create GitHub issues #535-#542 and #576-#
 
 ## Settings & Preferences (5)
 - [ ] **Add notification category mute controls to creator-dashboard/settings** — Confirm granular per-category notification toggles, not just a single on/off. (frontend)
-- [ ] **Add currency display preference (XLM/USD) applied globally** — Confirm `preferences-store.ts` currency setting is consistently read across all balance/price displays. (frontend)
 - [ ] **Add data export (GDPR) self-service UI** — Confirm a user-facing UI exists for the backend's data export/account deletion capability referenced in existing issues. (frontend)
 - [ ] **Add account deletion confirmation flow** — Confirm a full self-service account deletion UI with safeguards exists. (frontend)
 - [ ] **Add language switcher visible outside creator-dashboard settings** — Confirm locale switching is discoverable from the main nav, not buried in dashboard settings. (frontend)
 
 ## Notifications (Web) (3)
-- [ ] **Add web push notification opt-in flow** — Confirm browser push notifications (not just in-app) are supported for key events. (frontend)
 - [ ] **Add real-time notification badge count in the header** — Confirm unread count updates live via WebSocket, not just on page load. (frontend)
 
 ## Telemetry & Experiments (5)
-- [ ] **Add funnel drop-off dashboard for internal use consuming `lib/telemetry/funnel`** — Confirm funnel data is visualized somewhere, not just collected. (frontend, telemetry)
 - [ ] **Add experiment results viewer for `lib/experiments`** — Confirm there's a way to review A/B test outcomes without querying PostHog directly. (frontend, telemetry)
 - [ ] **Add telemetry reliability layer test coverage audit** — Confirm `lib/telemetry/reliability` retry/non-blocking-dispatch logic has full test coverage. (frontend, telemetry, test)
 - [ ] **Add consent-aware telemetry gating (cookie/analytics consent banner)** — Confirm PostHog tracking respects user consent choices, especially for EU users. (frontend, telemetry)
 - [ ] **Add telemetry event schema documentation generator** — No auto-generated reference of all tracked event names/payloads from `lib/telemetry/events.ts`. (frontend, telemetry, documentation)
 
 ## PWA & Offline (4)
-- [ ] **Add offline queue for actions attempted while offline** — Confirm `app/offline/page.tsx` is just a fallback page and not a full offline-action-queue; add one if missing. (frontend)
 - [ ] **Add install-to-homescreen prompt for supported browsers** — Confirm a custom PWA install prompt exists rather than relying solely on browser defaults. (frontend)
 - [ ] **Add offline asset caching strategy audit for marketplace images** — Confirm service worker caching rules are tuned for NFT image-heavy pages. (frontend)
 
@@ -90,7 +79,6 @@ Total entries: 137 (13 entries used to create GitHub issues #535-#542 and #576-#
 - [ ] **Add focus trap audit for all modal/dialog components in `components/ui`** — Confirm every dialog traps and restores focus correctly. (frontend)
 
 ## Performance (5)
-- [ ] **Add bundle size budget enforcement to CI** — No confirmed size-limit check preventing regressions in JS bundle size. (frontend, docker)
 - [ ] **Audit and optimize `framer-motion`/`gsap`/`lottie-react` combined bundle footprint** — Three animation libraries are installed; confirm no redundant overlap inflating bundle size. (frontend)
 - [ ] **Add image optimization audit for marketplace grids (Next.js `Image` usage consistency)** — Confirm every NFT thumbnail uses `next/image` with correct sizing, not raw `<img>`. (frontend)
 - [ ] **Add Core Web Vitals monitoring dashboard** — Confirm LCP/CLS/INP are tracked in production via PostHog or a dedicated RUM tool. (frontend, telemetry)

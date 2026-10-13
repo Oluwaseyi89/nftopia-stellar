@@ -2,31 +2,23 @@
 
 Minimal issue titles + one-line descriptions, grouped by concern, generated from a codebase study on 2026-09-21. `nftopia-admin` is an essentially unbuilt Vite + React 19 + TypeScript + Tailwind v4 + i18next scaffold (a static placeholder `App.tsx`, no router, no auth, no data fetching, no real screens) — this backlog sequences foundational work first, then maps feature screens onto the substantial admin-relevant API surface already implemented in `nftopia-backend` (`src/admin/admin.controller.ts`, `src/admin/admin-ai-flags.controller.ts`, `src/modules/collection/collection.controller.ts` admin verification routes, `src/modules/transaction/transaction-retry.controller.ts`, and more). There is currently no dedicated "admin" GitHub label on the repo — recommend creating one before turning these into issues. Source list for expanding into full GitHub issues (see repo issue template pattern: Summary / Discord link / Problem Statement / Required Changes / Acceptance Criteria / Directory). Suggested label(s) in parentheses — never apply "Stellar Wave", "GrantFox", "GrantFox OSS", "Maybe Rewarded", "Official Campaign", "Official Campaign | FWC26", "Third Campaign", "duplicate", "invalid", "question", "wontfix", "good first issue", or "help wanted" to anything sourced from this file.
 
-Total entries: 138 (12 entries used to create GitHub issues #559-#566 and #600, #604, #606 have been removed to avoid duplication)
+Total entries: 126 (24 entries used to create GitHub issues #559-#566, #600, #604, #606, and #689-#700 have been removed to avoid duplication)
 
 ## Foundation — Routing, Auth, Layout, Data Fetching (15)
 - [ ] **Add an admin-role guard distinguishing admin from regular authenticated users** — Backend auth issues a JWT with no confirmed admin-role claim consumed by any client yet; define and enforce it here. (Typescript, enhancement)
 - [ ] **Add environment configuration for backend API base URL (dev/staging/prod)** — No `.env` handling exists yet for pointing at different backend environments. (Typescript, documentation)
 - [ ] **Set up a data-fetching/caching library (TanStack Query or SWR)** — No query/cache layer exists; every screen would otherwise hand-roll loading/error state. (Typescript)
 - [ ] **Add global error boundary and toast/notification system** — No shared error-surface pattern exists for failed API calls. (Typescript, enhancement)
-- [ ] **Add protected-route wrapper redirecting unauthenticated users to login** — Depends on the router and auth guard above; without it every route is publicly reachable. (Typescript)
 - [ ] **Add session/token expiry handling with auto-redirect to login** — No token refresh or expiry handling exists once auth is added. (Typescript)
 - [ ] **Wire `src/i18n.ts` locale switcher into the new `AppShell` header** — i18next is configured with `en`/`es` locales but nothing in the UI lets an admin switch language yet. (Typescript)
 - [ ] **Add a loading-skeleton component library for list/table views** — No shared skeleton components exist for the data-heavy screens about to be built. (Typescript)
-- [ ] **Add a shared `DataTable` component (sort, paginate, empty/error states)** — Nearly every admin screen (users, collections, flags, transactions) needs the same tabular pattern. (Typescript)
-- [ ] **Add a shared `ConfirmDialog` component for destructive actions** — Ban/hide/reject actions all need a confirmation step before submission. (Typescript)
-- [ ] **Set up Vitest + Testing Library conventions beyond the two existing property tests** — Only `bugCondition.test.ts`/`preservation.test.ts` exist; no component-testing pattern is established. (test)
 
 ## User Management (8)
-- [ ] **Build user detail view (profile, wallet, activity summary)** — No detail screen exists for inspecting a single user account. (Typescript)
-- [ ] **Add ban reason capture and confirmation dialog** — Backend endpoint accepts a ban; confirm/add a reason field and require confirmation before submitting. (Typescript)
 - [ ] **Add ban history/audit trail display per user** — No UI surfaces past moderation actions taken against a user. (Typescript)
 - [ ] **Add bulk user actions (multi-select ban)** — No batch operation exists for acting on multiple flagged accounts at once. (Typescript)
 - [ ] **Add user role/permission display and edit (if backend supports roles)** — Confirm whether `users.service.ts` models admin/moderator roles, and surface/edit them here if so. (Typescript, Integration)
 
 ## Collection Verification (8)
-- [ ] **Wire approve action to `POST admin/verifications/:id/approve`** — No consumer of this endpoint exists yet. (Typescript, Integration)
-- [ ] **Wire reject action to `POST admin/verifications/:id/reject`** — No consumer of this endpoint exists yet; include a rejection-reason field. (Typescript, Integration)
 - [ ] **Add collection detail preview within the verification review screen** — Reviewers need to see collection metadata/artwork before approving, not just an ID. (Typescript)
 - [ ] **Wire hide/unhide action to `PUT collections/:id/hide`** — No consumer of this moderation endpoint exists yet. (Typescript, Integration)
 - [ ] **Wire verify action to `PUT collections/:id/verify`** — Separate from the verifications-queue approve flow; confirm how these two verification paths relate and surface both correctly. (Typescript, Integration)
@@ -42,8 +34,6 @@ Total entries: 138 (12 entries used to create GitHub issues #559-#566 and #600, 
 - [ ] **Add moderation queue depth alert banner in the admin header** — Surface when the AI moderation backlog is growing, once backend metrics exist. (Typescript)
 
 ## Transaction & Settlement Ops (10)
-- [ ] **Build DLQ list view with per-entry status and retry count** — `GET dlq` has no consumer. (Typescript, Integration)
-- [ ] **Wire single-entry retry action to `POST dlq/:retryId/retry`** — No consumer exists yet. (Typescript, Integration)
 - [ ] **Wire bulk retry action to `POST dlq/bulk-retry`** — No consumer exists yet; needs a confirmation dialog given blast radius. (Typescript, Integration)
 - [ ] **Wire delete action to `DELETE :retryId`** — No consumer exists yet for removing a DLQ entry. (Typescript, Integration)
 - [ ] **Wire cleanup action to `DELETE cleanup/:days`** — No consumer exists yet for bulk-purging old resolved entries; needs strong confirmation. (Typescript, Integration)
@@ -53,7 +43,6 @@ Total entries: 138 (12 entries used to create GitHub issues #559-#566 and #600, 
 - [ ] **Add role-gated access so only ops/admin roles reach this screen** — Financial-operations tooling needs stricter access than general moderation screens. (Typescript, Integration)
 
 ## Platform Analytics & Dashboards (7)
-- [ ] **Wire dashboard stat cards to real backend aggregate endpoints** — Confirm whether such aggregate endpoints exist in `nftopia-backend`; add them if missing, then consume them here. (Typescript, Integration)
 - [ ] **Add collection analytics view consuming `collection-analytics.controller.ts`** — `:id/stats` has no admin-facing consumer for cross-collection comparison. (Typescript, Integration)
 - [ ] **Add time-range selector for all analytics views** — No date-range filtering exists for any metric. (Typescript)
 - [ ] **Add AI usage/cost dashboard consuming backend `ai-usage` data** — Admins need visibility into platform-wide Anthropic spend, not just per-user via `GET /ai/usage`. (Typescript, Integration)
@@ -102,7 +91,6 @@ Total entries: 138 (12 entries used to create GitHub issues #559-#566 and #600, 
 - [ ] **Add bundle size check to CI given this is an operator tool, not public-facing** — Even though performance is less critical than the public marketplace, catch runaway bundle growth. (docker)
 
 ## Documentation (3)
-- [ ] **Write `nftopia-admin/README.md` covering setup, auth, and available screens** — Current `README.md` is likely the default Vite template; replace with real project documentation. (documentation)
 - [ ] **Document the admin role model and how it's granted** — No doc explains how a user account becomes an admin/moderator. (documentation)
 - [ ] **Document each backend admin endpoint this app consumes, with request/response shapes** — No single reference maps admin UI actions to backend routes for future contributors. (documentation)
 

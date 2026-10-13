@@ -12,27 +12,21 @@ arbitration in `dispute_resolution.rs`) are intentionally excluded here.
 
 Each entry: `- [ ] **Title** — description. _(kind: ...)_`
 
-Total entries: 141 (9 entries used to create GitHub issues #551-#558 and #595 have been removed to avoid duplication)
-
-Total entries: 142 (8 entries used to create GitHub issues #551-#558 have been removed to avoid duplication).
+Total entries: 130 (20 entries used to create GitHub issues #551-#558, #595, and #677-#688 have been removed to avoid duplication — one of the #677-#688 batch, the `nft_contract::burn()` pause-enforcement fix, was a bonus finding during verification and was never a literal line in this file, so only 11 lines were removed for that batch of 12)
 
 ## nft_contract — Correctness & Hardening (15)
 
 - [ ] **Audit `mint` for royalty-override abuse by non-admin callers** — `token.rs`'s `mint` accepts a `royalty_override` from the caller; confirm only an authorized minter can set a royalty that diverges from `DefaultRoyalty`, not an arbitrary value benefiting themselves. _(kind: Rust, Soroban, bug)_
-- [ ] **Add pagination to owner/collection token queries** — `storage.rs` and `token.rs` expose per-owner token lookups; confirm there's a bounded/paginated query path so an account with many tokens can't produce an unbounded `Vec` read. _(kind: Rust, Soroban, enhancement)_
 - [ ] **Document and test the metadata-freeze transition in `metadata.rs`** — verify `MetadataFrozen` can only move false→true, never back, and add a test asserting a post-freeze update is rejected. _(kind: Rust, Soroban, test)_
 - [ ] **Add negative tests for `access_control.rs` role checks** — `require_minter`/`require_burner`/`require_metadata_updater` need tests asserting a caller without the role is rejected, not just the happy path. _(kind: Rust, Soroban, test)_
 - [ ] **Verify `transfer.rs` clears per-token approvals on transfer** — confirm an approval granted to a previous operator cannot be used after ownership changes. _(kind: Rust, Soroban, bug)_
 - [ ] **Add supply-cap boundary tests for `validate_supply_cap`** — cover `max_supply == 0` (unlimited vs. disabled?) and minting exactly at the cap in `storage.rs`. _(kind: Rust, Soroban, test)_
-- [ ] **Correct README's "scaffold-level" description of `nft_contract`** — `README.md` says `nft_contract` is scaffolded compared to other packages, but it has 12 modules and 43 tests; update the docs to reflect its actual maturity. _(kind: documentation)_
 - [ ] **Add contract-level pause/unpause to `nft_contract`** — confirm whether `IsPaused` (set at `initialize`) is actually checked by `mint`/`transfer`/`burn`; if not enforced everywhere, wire it in consistently. _(kind: Rust, Soroban, bug)_
 - [ ] **Add royalty percentage upper-bound test at exactly `MAX_ROYALTY_BPS`** — boundary-test `royalty.rs` at the cap and cap+1 to confirm the off-by-one behavior is intended. _(kind: Rust, Soroban, test)_
 - [ ] **Add ownership-transfer event assertions to `events.rs` tests** — confirm every state-changing entrypoint (mint, transfer, burn, royalty update) emits the expected event with correct topics/data. _(kind: Rust, Soroban, test)_
 - [ ] **Review `interface.rs` for SEP-41/token-interface alignment** — check whether the public token interface aligns with any relevant Stellar token/NFT interface convention for wallet and indexer compatibility. _(kind: Rust, Soroban, enhancement)_
 - [ ] **Add fuzz test for `TokenAttribute` vector size limits in `types.rs`** — confirm an attacker can't mint a token with an unbounded attributes vector to inflate storage cost. _(kind: Rust, Soroban, test)_
 - [ ] **Audit `error.rs` for consistent error granularity** — check that distinct failure modes (unauthorized, not-found, already-exists, invalid-input) map to distinct `ContractError` variants rather than being collapsed. _(kind: Rust, Soroban, enhancement)_
-- [ ] **Reduce `.unwrap()` usage in `nft_contract` non-test code** — replace panics from `.unwrap()` with explicit `ContractError` returns where the call site can reasonably fail. _(kind: Rust, Soroban, bug)_
-- [ ] **Generate and publish `nft_contract` client bindings for backend/frontend TS consumption** — no generated TS client exists yet for this contract's `#[contractimpl]` interface. _(kind: Rust, Soroban, Integration)_
 
 ## collection_factory (12)
 
@@ -51,8 +45,6 @@ Total entries: 142 (8 entries used to create GitHub issues #551-#558 have been r
 
 ## marketplace_settlement — Escrow & Atomic Swap (8)
 
-- [ ] **Add test asserting `check_escrow_balance` reflects real holdings** — once fixed, add a regression test depositing funds and confirming the reported balance matches. _(kind: Rust, Soroban, test)_
-- [ ] **Audit `release_escrow` for double-release risk** — confirm escrow state is marked released before/atomically-with the actual transfer so it cannot be released twice for the same transaction. _(kind: Rust, Soroban, bug)_
 - [ ] **Add atomic-swap timeout/expiry handling** — confirm an initiated swap that's never completed can be cancelled/reclaimed by the initiator after a timeout rather than locking funds indefinitely. _(kind: Rust, Soroban, enhancement)_
 - [ ] **Add multi-asset atomic swap test matrix** — cover XLM-for-NFT, NFT-for-NFT, and multi-token bundle swap combinations in `test.rs`. _(kind: Rust, Soroban, test)_
 - [ ] **Audit escrow accounting invariants after partial failures** — verify a swap that fails midway leaves escrowed balances exactly matching what's recoverable, with no funds stuck or double-counted. _(kind: Rust, Soroban, bug)_
@@ -80,7 +72,6 @@ Total entries: 142 (8 entries used to create GitHub issues #551-#558 have been r
 
 ## marketplace_settlement — Disputes (6)
 
-- [ ] **Add dispute evidence size/format validation** — confirm `initiate_dispute`'s `evidence_uri: Option<Bytes>` has a bounded length check to avoid storage bloat from oversized evidence payloads. _(kind: Rust, Soroban, bug)_
 - [ ] **Add dispute timeout/auto-resolution path** — confirm a dispute that receives no votes/resolution within a window has a defined fallback outcome rather than staying open indefinitely. _(kind: Rust, Soroban, enhancement)_
 - [ ] **Add multi-party dispute voting quorum test** — once arbitration is implemented (tracked separately), add a test asserting the vote quorum/threshold logic in `dispute_resolution.rs`. _(kind: Rust, Soroban, test)_
 - [ ] **Audit dispute initiation for spam/griefing resistance** — confirm there's a cost or rate limit preventing a party from repeatedly opening disputes on the same transaction. _(kind: Rust, Soroban, bug)_
@@ -101,8 +92,6 @@ Total entries: 142 (8 entries used to create GitHub issues #551-#558 have been r
 ## marketplace_settlement — Security Hardening (10)
 
 - [ ] **Optimize commitment cleanup in `frontrun_protection.rs`** — the cleanup routine at line 96 is flagged "simplified... in production you'd want a more efficient approach," iterating all bidders rather than expiring commitments individually. _(kind: Rust, Soroban, enhancement)_
-- [ ] **Add reentrancy guard coverage audit across all state-changing entrypoints** — enumerate every public `#[contractimpl]` method in `settlement_core.rs`/`atomic_swap.rs` and confirm each is wrapped by `ReentrancyGuard::execute` where it should be. _(kind: Rust, Soroban, bug)_
-- [ ] **Add rate-limiter bypass test via multiple accounts** — confirm `security/rate_limiter.rs` rate-limits by a dimension that can't be trivially sidestepped by spinning up new addresses for a single actor. _(kind: Rust, Soroban, bug)_
 - [ ] **Add commit-reveal timing attack test vectors** — extend `frontrun_protection.rs` tests to cover a bidder revealing at the earliest and latest allowed block/ledger boundary. _(kind: Rust, Soroban, test)_
 - [ ] **Audit `PauseManager` module granularity vs. actual enforcement** — confirm every `ModuleType` variant checked by `check_module_not_paused` is actually invoked at the start of its corresponding entrypoints, with no gaps. _(kind: Rust, Soroban, bug)_
 - [ ] **Add cross-function reentrancy test (not just same-function)** — confirm the reentrancy guard prevents an attacker from re-entering via a *different* guarded function mid-execution, not only the same one. _(kind: Rust, Soroban, test)_
@@ -169,7 +158,6 @@ Total entries: 142 (8 entries used to create GitHub issues #551-#558 have been r
 
 ## Testing & Security Audit Readiness (18)
 
-- [ ] **Commission a third-party security audit and track remediation** — no audit has been performed; create the tracking issue and checklist for engaging an external Soroban-specialized auditor before mainnet. _(kind: Rust, Soroban, bug)_
 - [ ] **Run and fix all `cargo clippy -- -D warnings` findings workspace-wide** — confirm CI's clippy gate is actually clean, not just configured, across all four packages. _(kind: Rust)_
 - [ ] **Add a fuzzing harness (e.g. `cargo-fuzz` or Soroban's fuzz tooling) for settlement math** — property/fuzz-test `math_utils.rs` fee and royalty calculations for panics on extreme inputs. _(kind: Rust, Soroban, test)_
 - [ ] **Add negative-path test coverage report per contract** — audit `test.rs` files to confirm each has meaningful revert/error-path coverage, not just happy-path assertions (spot-check found strong coverage in `marketplace_settlement`'s 89 tests, but this should be a documented, repeatable audit for all four). _(kind: Rust, Soroban, test)_
@@ -179,7 +167,6 @@ Total entries: 142 (8 entries used to create GitHub issues #551-#558 have been r
 - [ ] **Add gas/resource-cost benchmarking suite across all four contracts** — track per-operation resource consumption over time to catch regressions before they hit mainnet fee costs. _(kind: Rust, Soroban, test)_
 - [ ] **Add a "known limitations" section to each contract's module doc comment** — explicitly document every found placeholder/simplified-implementation (escrow balance check, bundle trade execution, dispute auction linkage, withdrawal monitoring, increment-gaming heuristic) in one discoverable place until each is resolved. _(kind: documentation)_
 - [ ] **Add mutation testing to catch weak assertions in existing test suites** — run a Rust mutation-testing tool (e.g. `cargo-mutants`) to find tests that pass even when the underlying logic is deliberately broken. _(kind: Rust, test)_
-- [ ] **Add a `SECURITY.md` for the contracts workspace** — document how to responsibly disclose a vulnerability found in any of the four contracts. _(kind: documentation)_
 - [ ] **Add test for concurrent/racing calls to the same auction from multiple simulated bidders** — stress the bidding path with interleaved calls to catch ordering assumptions that only hold in a single-threaded test harness. _(kind: Rust, Soroban, test)_
 - [ ] **Add regression test suite specifically for every bug found during the security audit** — placeholder issue to track audit-derived findings once the third-party audit (tracked above) completes. _(kind: Rust, Soroban, test)_
 - [ ] **Audit all `Address`-typed storage keys for authorization bypass via address reuse** — confirm no code path lets a caller supply an arbitrary `Address` to read/write another account's data without that account's `require_auth()`. _(kind: Rust, Soroban, bug)_
