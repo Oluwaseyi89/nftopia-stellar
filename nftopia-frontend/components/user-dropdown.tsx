@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { ChevronDown, User, LogOut, Settings } from "lucide-react";
+import { ChevronDown, User, LogOut, Settings, Heart, ShieldCheck } from "lucide-react";
 import { OptimizedImage } from './image';
 import { useAuth } from "@/lib/stores/auth-store";
 import { useToast } from "@/lib/stores";
@@ -104,12 +104,30 @@ export function UserDropdown() {
           </Link>
 
           <Link
+            href={localizedRoute("/favorites")}
+            role="menuitem"
+            className="flex items-center gap-3 px-4 py-2 text-sm text-white hover:bg-purple-600/20 transition-colors focus-visible:outline-none focus-visible:bg-purple-600/20"
+          >
+            <Heart className="w-4 h-4 text-rose-400 fill-rose-400/20" aria-hidden="true" />
+            Favorites
+          </Link>
+
+          <Link
             href={localizedRoute("/creator-dashboard/settings")}
             role="menuitem"
             className="flex items-center gap-3 px-4 py-2 text-sm text-white hover:bg-purple-600/20 transition-colors focus-visible:outline-none focus-visible:bg-purple-600/20"
           >
             <Settings className="w-4 h-4" aria-hidden="true" />
             Settings
+          </Link>
+
+          <Link
+            href={localizedRoute("/account/privacy")}
+            role="menuitem"
+            className="flex items-center gap-3 px-4 py-2 text-sm text-white hover:bg-purple-600/20 transition-colors focus-visible:outline-none focus-visible:bg-purple-600/20"
+          >
+            <ShieldCheck className="w-4 h-4" aria-hidden="true" />
+            Privacy and data
           </Link>
 
           <DropdownSeparator />

@@ -1,5 +1,6 @@
+use crate::security::frontrun_protection::WithdrawalAnomalyKind;
 use crate::types::*;
-use soroban_sdk::{contracttype, symbol_short, Address, Bytes, Env, Symbol, Vec};
+use soroban_sdk::{contracttype, symbol_short, Address, Bytes, BytesN, Env, Symbol, Vec};
 
 // Sale Events
 #[contracttype]
@@ -81,6 +82,16 @@ pub struct BidBelowMinimumIncrementEvent {
     pub current_highest_bid: i128,
     pub min_required_bid: i128,
     pub min_increment_bps: u64,
+    pub timestamp: u64,
+}
+
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct InvalidBidAmountEvent {
+    pub auction_id: u64,
+    pub bidder: Address,
+    pub bid_amount: i128,
+    pub minimum_bid_amount: i128,
     pub timestamp: u64,
 }
 
@@ -205,6 +216,79 @@ pub struct DisputeResolvedEvent {
     pub timestamp: u64,
 }
 
+/// Emitted once for every escrowed asset actually transferred when a dispute is
+/// settled. One event per movement, so off-chain indexers can reconcile balances
+/// without replaying escrow state.
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct DisputeFundsReleasedEvent {
+    pub dispute_id: u64,
+    pub transaction_id: u64,
+    pub resolution: u64,
+    /// Original depositor of the released holding.
+    pub from: Address,
+    /// Recipient chosen by the resolution.
+    pub to: Address,
+    pub asset: Asset,
+    pub amount: i128,
+    pub is_nft: bool,
+    pub timestamp: u64,
+}
+
+/// Emitted when a registered arbitration oracle submits a binding resolution.
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct DisputeOracleSubmittedEvent {
+    pub dispute_id: u64,
+    pub transaction_id: u64,
+    pub oracle: Address,
+    pub resolution: u64,
+    pub timestamp: u64,
+}
+
+/// Emitted when the admin registers, updates, or deactivates an arbitration oracle.
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct DisputeOracleUpdatedEvent {
+    pub oracle: Address,
+    pub public_key: BytesN<32>,
+    pub is_active: bool,
+    pub updated_by: Address,
+    pub timestamp: u64,
+}
+
+/// Emitted when a dispute auto-resolves because the arbitration timeout elapsed
+/// without the configured quorum being reached.
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct DisputeTimedOutEvent {
+    pub dispute_id: u64,
+    pub transaction_id: u64,
+    /// The default outcome applied because arbitration stalled.
+    pub resolution: u64,
+    pub deadline: u64,
+    pub timestamp: u64,
+}
+
+/// Emitted when the dispute admin registry is modified.
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct DisputeAdminUpdatedEvent {
+    pub admin: Address,
+    pub added: bool,
+    pub updated_by: Address,
+    pub timestamp: u64,
+}
+
+/// Emitted when the dispute configuration is replaced.
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct DisputeConfigUpdatedEvent {
+    pub config: crate::dispute_resolution::DisputeConfig,
+    pub updated_by: Address,
+    pub timestamp: u64,
+}
+
 // Bid Escrow / Refund Events
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -249,6 +333,21 @@ pub struct ReentrancyDetectedEvent {
 pub struct FrontRunningDetectedEvent {
     pub suspicious_address: Address,
     pub pattern: Bytes,
+    pub timestamp: u64,
+}
+
+/// Emitted whenever `WithdrawalPatternMonitor` flags or holds a withdrawal.
+/// `blocked` distinguishes a hard hold (withdrawal must not proceed) from a
+/// flag-only observation.
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct WithdrawalAnomalyEvent {
+    pub user: Address,
+    pub amount: i128,
+    /// Channel the withdrawal was attempted through, e.g. `withdraw_losing_bid`.
+    pub withdrawal_type: Bytes,
+    pub reason: WithdrawalAnomalyKind,
+    pub blocked: bool,
     pub timestamp: u64,
 }
 
@@ -532,6 +631,42 @@ pub fn emit_dispute_resolved(env: &Env, event: DisputeResolvedEvent) {
 }
 
 #[allow(deprecated)]
+pub fn emit_dispute_funds_released(env: &Env, event: DisputeFundsReleasedEvent) {
+    env.events()
+        .publish(("MarketplaceSettlement", symbol_short!("dsp_fund")), event);
+}
+
+#[allow(deprecated)]
+pub fn emit_dispute_oracle_submitted(env: &Env, event: DisputeOracleSubmittedEvent) {
+    env.events()
+        .publish(("MarketplaceSettlement", symbol_short!("dsp_orcl")), event);
+}
+
+#[allow(deprecated)]
+pub fn emit_dispute_oracle_updated(env: &Env, event: DisputeOracleUpdatedEvent) {
+    env.events()
+        .publish(("MarketplaceSettlement", symbol_short!("orc_regd")), event);
+}
+
+#[allow(deprecated)]
+pub fn emit_dispute_timed_out(env: &Env, event: DisputeTimedOutEvent) {
+    env.events()
+        .publish(("MarketplaceSettlement", symbol_short!("dsp_tout")), event);
+}
+
+#[allow(deprecated)]
+pub fn emit_dispute_admin_updated(env: &Env, event: DisputeAdminUpdatedEvent) {
+    env.events()
+        .publish(("MarketplaceSettlement", symbol_short!("dsp_adm")), event);
+}
+
+#[allow(deprecated)]
+pub fn emit_dispute_config_updated(env: &Env, event: DisputeConfigUpdatedEvent) {
+    env.events()
+        .publish(("MarketplaceSettlement", symbol_short!("dsp_cfgu")), event);
+}
+
+#[allow(deprecated)]
 pub fn emit_reentrancy_detected(env: &Env, event: ReentrancyDetectedEvent) {
     env.events()
         .publish(("MarketplaceSettlement", symbol_short!("reentr")), event);
@@ -541,6 +676,12 @@ pub fn emit_reentrancy_detected(env: &Env, event: ReentrancyDetectedEvent) {
 pub fn emit_front_running_detected(env: &Env, event: FrontRunningDetectedEvent) {
     env.events()
         .publish(("MarketplaceSettlement", symbol_short!("frontrun")), event);
+}
+
+#[allow(deprecated)]
+pub fn emit_withdrawal_anomaly(env: &Env, event: WithdrawalAnomalyEvent) {
+    env.events()
+        .publish(("MarketplaceSettlement", symbol_short!("wd_anom")), event);
 }
 
 #[allow(deprecated)]
@@ -662,6 +803,12 @@ pub fn emit_auction_cancelled_with_refunds(env: &Env, event: AuctionCancelledWit
 pub fn emit_bid_below_minimum_increment(env: &Env, event: BidBelowMinimumIncrementEvent) {
     env.events()
         .publish(("MarketplaceSettlement", symbol_short!("bid_min")), event);
+}
+
+#[allow(deprecated)]
+pub fn emit_invalid_bid_amount(env: &Env, event: InvalidBidAmountEvent) {
+    env.events()
+        .publish(("MarketplaceSettlement", symbol_short!("bid_inv")), event);
 }
 
 #[allow(deprecated)]

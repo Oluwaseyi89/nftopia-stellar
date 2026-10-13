@@ -2,6 +2,7 @@ import { ForbiddenException } from '@nestjs/common';
 import type { MessageEvent } from '@nestjs/common';
 import type { Observable } from 'rxjs';
 import { AiAgentService } from './ai-agent.service';
+import { PromptInjectionService } from './prompt-injection.service';
 import type { NftService } from '../nft/nft.service';
 import type { ListingService } from '../listing/listing.service';
 import type { CollectionService } from '../collection/collection.service';
@@ -9,6 +10,8 @@ import type { OrderService } from '../order/order.service';
 import type { AuctionService } from '../auction/auction.service';
 import type { AiUsageService } from './ai-usage.service';
 import type { ChatSessionService } from './chat-session.service';
+import type { Repository } from 'typeorm';
+import type { AiToolCallLog } from './entities/ai-tool-call-log.entity';
 
 // Anthropic() reads ANTHROPIC_API_KEY at construction time — see
 // ai-agent.service.spec.ts for why this must be set before import.
@@ -124,6 +127,11 @@ describe('AiAgentService.chatStream', () => {
       {} as AuctionService,
       aiUsageService as unknown as AiUsageService,
       chatSessionService as unknown as ChatSessionService,
+      {
+        save: jest.fn().mockResolvedValue(undefined),
+        createQueryBuilder: jest.fn(),
+      } as unknown as Repository<AiToolCallLog>,
+      new PromptInjectionService(),
     );
   });
 

@@ -9,10 +9,12 @@ import { useMarketplaceListings } from '@/hooks/useMarketplaceListings';
 import { useMarketplaceFiltersStore } from '@/stores/marketplaceFiltersStore';
 import type { MarketplaceListingCard as MarketplaceListingCardVM, MarketplaceSortOption } from '@/src/utils/marketplaceViewModels';
 import { getActiveMarketplaceFilterCount } from '@/src/utils/marketplaceViewModels';
-import { ErrorFallback } from '@/src/components/ErrorFallback';
 import { withErrorBoundary } from '@/src/hoc/withErrorBoundary';
 import { useAnalytics } from '@/src/hooks/useAnalytics';
 import { usePullToRefresh } from '@/src/hooks/usePullToRefresh';
+import { useListState } from '@/src/hooks/useListState';
+import { EmptyState } from '@/components/ui/EmptyState';
+import { ErrorState } from '@/components/ui/ErrorState';
 import { MarketplaceCardSkeleton } from '@/src/components/skeletons';
 import { PullToRefresh } from '@/src/components/PullToRefresh';
 import { ANALYTICS_EVENTS } from '@/src/analytics/config';
@@ -76,6 +78,13 @@ function MarketplaceContent() {
     if (query) {
       track(ANALYTICS_EVENTS.SEARCH, { screen: 'marketplace', query });
     }
+  };
+
+  const handleSearchSubmit = (query: string) => {
+    const q = (query || search).trim();
+    if (!q) return;
+    track(ANALYTICS_EVENTS.SEARCH, { screen: 'marketplace', query: q, action: 'submit' });
+    navigation.navigate('SearchResults', { query: q });
   };
 
   const handleSortChange = (option: MarketplaceSortOption) => {
@@ -151,15 +160,28 @@ function MarketplaceContent() {
     );
   };
 
-  const renderEmpty = () => (
-    <View style={styles.emptyContainer} testID="marketplace-empty">
-      <Text style={styles.emptyTitle}>{t('marketplace.noNFTs')}</Text>
-      <Text style={styles.emptyMessage}>{t('marketplace.noNFTsMessage')}</Text>
-    </View>
-  );
+  // A search string or an active filter narrows an otherwise-nonempty
+  // catalog — "no results" reads very differently from "nothing listed
+  // yet" (#472), so the empty state picks copy/variant based on this.
+  const isFiltered = activeFilterCount > 0 || !!search;
 
-  const showFullScreenError = error && listings.length === 0;
-  const showInitialLoading = loading && listings.length === 0;
+  const listState = useListState({
+    loading,
+    error,
+    itemCount: listings.length,
+    isFiltered,
+  });
+
+  const renderEmpty = () => (
+    <EmptyState
+      testID="marketplace-empty"
+      variant={isFiltered ? 'filtered' : 'no-data'}
+      title={isFiltered ? t('marketplace.noNFTs') : t('marketplace.emptyNoData')}
+      subtitle={
+        isFiltered ? t('marketplace.noNFTsMessage') : t('marketplace.emptyNoDataMessage')
+      }
+    />
+  );
 
   return (
     <View style={styles.container}>
@@ -179,7 +201,15 @@ function MarketplaceContent() {
       <View style={styles.filters}>
         <View style={styles.filtersTopRow}>
           <View style={styles.searchWrapper}>
-            <MarketplaceSearchBar onSearchChange={handleSearchChange} testID="marketplace-search" />
+            <MarketplaceSearchBar onSearchChange={handleSearchChange} onSubmit={handleSearchSubmit} testID="marketplace-search" />
+            <TouchableOpacity
+              onPress={() => handleSearchSubmit(search)}
+              accessibilityRole="button"
+              accessibilityLabel="Search"
+              style={{ marginLeft: 8, padding: 8 }}
+            >
+              <Text style={{ color: '#6C5CE7', fontWeight: '600' }}>Go</Text>
+            </TouchableOpacity>
           </View>
           <TouchableOpacity
             style={styles.filterTrigger}
@@ -215,16 +245,17 @@ function MarketplaceContent() {
         testID="marketplace-filter-sheet"
       />
 
-      {showFullScreenError ? (
-        <ErrorFallback
-          error={error}
+      {listState === 'error' ? (
+        <ErrorState
+          testID="marketplace-error"
+          title={t('marketplace.loadError')}
+          subtitle={t('marketplace.loadErrorMessage')}
           onRetry={() => {
             track('marketplace_refresh');
             handleRefresh();
           }}
-          customMessage="Failed to load NFTs. Please check your connection and try again."
         />
-      ) : showInitialLoading ? (
+      ) : listState === 'loading' ? (
         <MarketplaceCardSkeleton count={4} animated variant="grid" />
       ) : (
         <PullToRefresh
@@ -354,23 +385,5 @@ const styles = StyleSheet.create({
   footerLoader: {
     paddingVertical: spacing.md,
     alignItems: 'center',
-  },
-  emptyContainer: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: spacing.xl,
-    paddingTop: spacing.xxl,
-  },
-  emptyTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: colors.text,
-    marginBottom: spacing.xs,
-  },
-  emptyMessage: {
-    fontSize: 14,
-    color: colors.textSecondary,
-    textAlign: 'center',
   },
 });

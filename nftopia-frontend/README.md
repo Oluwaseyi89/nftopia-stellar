@@ -53,6 +53,12 @@ NFTopia Frontend is the browser-based marketplace and creator interface for the 
 └─────────────────────────────────────────────────────────────────────┘
 ```
 
+## 🔄 PWA Update Strategy
+
+The frontend uses `next-pwa` with `skipWaiting: true` configured. When a new version of the service worker is available, a non-intrusive banner appears at the bottom of the screen prompting the user to reload to get the latest version. Clicking the "Reload" button will activate the new service worker and refresh the page.
+
+This ensures that users are prompted to update when a new version is deployed, while still allowing the update to occur automatically on a full page reload if the banner is dismissed.
+
 ## 🗺️ Route Map
 
 Current top-level route areas include:
@@ -125,6 +131,7 @@ The frontend currently reads these runtime values directly from code:
 | `npm run graphql:codegen:watch` | Watch GraphQL schema and regenerate types |
 | `npm run validate-translations` | Validate locale file completeness |
 | `npm run analyze` | Build with bundle analysis enabled |
+| `npm run lighthouse` | Run Lighthouse CI against the configured budgets |
 
 ## 📁 Project Structure
 
@@ -160,6 +167,19 @@ npm run test
 npm run validate-translations
 ```
 
+### Manual Test Procedure for PWA Updates
+
+1. Build the frontend: `npm run build`
+2. Start the production server: `npm run start`
+3. Visit the app in a supported browser (Chrome, Firefox, Edge) and ensure it loads.
+4. Open the developer tools and go to the Application tab (or Service Workers in Firefox).
+5. Simulate an update by changing something in the frontend (e.g., modify a text string) and rebuild.
+6. Reload the page to trigger the service worker update.
+7. Observe that a banner appears at the bottom of the screen with the message "Update available — refresh to get the latest version" and a "Reload" button.
+8. Click the "Reload" button to verify that the page reloads and the new version is loaded.
+
+You can also test by deploying a new version to a staging environment and visiting the site with an existing service worker.
+
 Useful companion docs in this workspace:
 
 - `QA-RESPONSIVENESS-CHECKLIST.md`
@@ -170,3 +190,43 @@ Useful companion docs in this workspace:
 
 - The active wallet, network, and backend integration code is aligned around Stellar and Soroban. Translation strings and UI copy reflect Stellar branding throughout.
 - The project supports four locale folders: EN, FR, ES, and DE.
+
+## 🚦 Lighthouse Budgets
+
+`lighthouserc.js` turns Lighthouse into a merge gate for the three highest-traffic
+surfaces: the landing page (`/`), marketplace browse (`/en/marketplace`) and NFT
+detail (`/en/marketplace/1`). `npm run lighthouse` starts the production build on
+port 5000 and asserts the budgets below; set `LHCI_BASE_URL` to run the same
+budgets against a deployed preview instead.
+
+| Budget | Threshold | Severity | Why |
+| --- | --- | --- | --- |
+| `categories:performance` | >= 0.80 | error | Floor for the heaviest asset pages; below this the marketplace grid feels broken on mid-tier mobile. |
+| `categories:accessibility` | >= 0.90 | error | The marketplace is a WCAG-relevant surface and already ships a11y-oriented components; regressions must block. |
+| `categories:best-practices` | >= 0.90 | warn | Useful signal, but noisy for a Stellar dapp (wallet extensions, third-party scripts). |
+| `categories:seo` | >= 0.90 | error on `/` + `/en/marketplace`, warn on NFT detail | Locale-aware metadata is a product requirement; a broken `generateMetadata` should fail CI. The detail route renders API data, which is unavailable during `lhci autorun`, so its crawlability is advisory (see below). |
+| `largest-contentful-paint` | <= 2500 ms | error | Core Web Vitals good boundary (75th percentile). |
+| `cumulative-layout-shift` | <= 0.1 | error | Core Web Vitals good boundary; the grid/marketplace cards are the usual culprit. |
+| `total-blocking-time` | <= 200 ms | error | Lab proxy for INP, which has no lab metric of its own. |
+| `first-contentful-paint` | <= 2000 ms | warn | Leading indicator for LCP; warns early rather than failing on its own. |
+| `interactive` | <= 3500 ms | warn | Legacy TTI signal, kept advisory. |
+| `speed-index` | <= 3400 ms | warn | Advisory visual-completeness signal. |
+| `uses-responsive-images` | 0 oversized | warn | The marketplace serves user media; an unsized hero is an easy regression. |
+| `unsized-images` | 0 | error | Unsized media is the single most common CLS regression in this codebase. |
+
+Thresholds sit slightly below each page's current baseline so ordinary noise does
+not fail unrelated PRs, while a real regression still trips the gate. Every run is
+the median of three passes to avoid one slow run flapping the build.
+
+`lhci autorun` starts the frontend on its own, without the GraphQL API, so the NFT
+detail route (`/en/marketplace/1`) renders its not-found shell there. That shell is
+deliberately `noindex`, and `is-crawlable` alone carries a 4.0 weight in the SEO
+category, so the detail URL is held to every performance/accessibility/Core Web
+Vitals budget but its SEO score is reported as a warning rather than a failure. The
+per-URL split lives in `assertMatrix` in `lighthouserc.js`; the rendered route itself
+is covered by the e2e suite.
+
+Crawler files are real routes: `app/robots.ts` serves `/robots.txt` and
+`app/sitemap.ts` serves `/sitemap.xml`. Before them, `/robots.txt` fell through to
+the `[locale]` dynamic segment and returned the app shell HTML, which is what the
+`robots-txt` audit flags as "robots.txt is not valid".

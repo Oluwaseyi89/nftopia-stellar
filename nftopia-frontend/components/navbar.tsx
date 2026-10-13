@@ -16,14 +16,18 @@ import {
   Layers,
   Activity,
   Settings,
+  Heart,
 } from "lucide-react";
 import { useState, useEffect, useRef, useCallback } from "react";
 import { WalletConnector } from "@/components/wallet/WalletConnector";
 import { UserDropdown } from "./user-dropdown";
 import { AccountEntryMenu } from "./account-entry-menu";
+import { NotificationDropdown } from "./notifications/notification-dropdown";
 import { useAuth } from "@/lib/stores/auth-store";
+import { useTransactionStore } from "@/lib/stores/transaction-store";
 import { useTranslation } from "@/hooks/useTranslation";
 import { LanguageSwitcher, MobileLanguageSwitcher } from "./LanguageSwitcher";
+
 
 export function Navbar() {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
@@ -34,6 +38,12 @@ export function Navbar() {
   const wasMenuOpenRef = useRef(false);
   const { isAuthenticated, loading } = useAuth();
   const { t, locale } = useTranslation();
+  const pendingTransactionCount = useTransactionStore((state) =>
+    state.transactions.filter(
+      (transaction) =>
+        transaction.status === "pending" || transaction.status === "processing",
+    ).length,
+  );
 
   const closeMenu = useCallback(() => setIsMenuOpen(false), []);
   const openMenu = useCallback(() => setIsMenuOpen(true), []);
@@ -177,6 +187,22 @@ export function Navbar() {
               <LanguageSwitcher />
             </div>
 
+            {/* Notification Center Dropdown */}
+            <NotificationDropdown />
+            <Link
+              href={`/${locale}/transactions`}
+              className="relative grid h-10 w-10 place-items-center text-white hover:text-cyan-200"
+              aria-label={`Transactions${pendingTransactionCount ? `, ${pendingTransactionCount} pending` : ""}`}
+              title="Transactions"
+            >
+              <Activity className="h-5 w-5" aria-hidden="true" />
+              {pendingTransactionCount > 0 && (
+                <span className="absolute -right-1 -top-1 grid h-5 min-w-5 place-items-center rounded-full bg-cyan-300 px-1 text-[10px] font-bold text-slate-950">
+                  {pendingTransactionCount > 9 ? "9+" : pendingTransactionCount}
+                </span>
+              )}
+            </Link>
+
             {/* Desktop: UserDropdown if logged in, WalletConnector + AccountEntryMenu if not */}
             {!loading && (
               isAuthenticated
@@ -188,6 +214,7 @@ export function Navbar() {
                   </div>
                 )
             )}
+
 
             {/* Mobile hamburger */}
             <button
@@ -285,12 +312,33 @@ export function Navbar() {
                   Activity
                 </Link>
                 <Link
+                  href={`/${locale}/transactions`}
+                  className="text-sm font-medium py-2.5 hover:text-cyan-200 transition-colors flex items-center gap-2"
+                  onClick={closeMenu}
+                >
+                  <Activity className="h-5 w-5" />
+                  Transactions
+                  {pendingTransactionCount > 0 && (
+                    <span className="ml-auto rounded-full bg-cyan-300 px-2 py-0.5 text-xs font-semibold text-slate-950">
+                      {pendingTransactionCount}
+                    </span>
+                  )}
+                </Link>
+                <Link
                   href={`/${locale}/marketplace`}
                   className="text-sm font-medium py-2.5 hover:text-purple-400 transition-colors flex items-center gap-2"
                   onClick={e => { handleNavClick(e, NAV_ITEM_IDS.MARKETPLACE, NAV_PLACEMENTS.NAVBAR_MOBILE_DRAWER, `/${locale}/marketplace`, isMenuOpen ? "drawer_open" : "collapsed"); closeMenu(); }}
                 >
                   <ShoppingBag className="h-5 w-5" />
                   {t("navigation.marketplace")}
+                </Link>
+                <Link
+                  href={`/${locale}/favorites`}
+                  className="text-sm font-medium py-2.5 hover:text-purple-400 transition-colors flex items-center gap-2"
+                  onClick={e => { handleNavClick(e, "favorites", NAV_PLACEMENTS.NAVBAR_MOBILE_DRAWER, `/${locale}/favorites`, isMenuOpen ? "drawer_open" : "collapsed"); closeMenu(); }}
+                >
+                  <Heart className="h-5 w-5 text-rose-400" />
+                  Favorites
                 </Link>
                 <Link
                   href={`/${locale}/artists`}

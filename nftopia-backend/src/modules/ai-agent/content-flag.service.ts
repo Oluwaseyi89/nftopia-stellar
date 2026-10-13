@@ -26,6 +26,7 @@ export interface CreateContentFlagInput {
 export interface ResolveContentFlagInput {
   status: Exclude<ContentFlagStatus, 'pending'>;
   reviewedBy: string;
+  reason?: string;
   ipAddress?: string;
   userAgent?: string;
 }
@@ -49,6 +50,19 @@ export class ContentFlagService {
     private readonly contentFlagRepo: Repository<ContentFlag>,
     private readonly auditService: AuditService,
   ) {}
+
+  /**
+   * Idempotency check for the ai-moderation queue processor (#527): a
+   * redelivered job for the same entity must not raise a second flag.
+   * Matches on entity identity alone (any status), not job/attempt —
+   * once an entity has ever been flagged, moderation for it is done.
+   */
+  async findExistingFlag(
+    entityType: ContentFlagEntityType,
+    entityId: string,
+  ): Promise<ContentFlag | null> {
+    return this.contentFlagRepo.findOne({ where: { entityType, entityId } });
+  }
 
   async createFlag(input: CreateContentFlagInput): Promise<ContentFlag> {
     const flag = this.contentFlagRepo.create({
@@ -116,6 +130,9 @@ export class ContentFlagService {
     flag.status = input.status;
     flag.reviewedAt = new Date();
     flag.reviewedBy = input.reviewedBy;
+    if (input.reason !== undefined) {
+      flag.resolutionReason = input.reason;
+    }
     const saved = await this.contentFlagRepo.save(flag);
 
     const action =
@@ -128,11 +145,33 @@ export class ContentFlagService {
       entityType: 'ContentFlag',
       entityId: id,
       beforeState,
-      afterState: { status: saved.status },
+      afterState: { status: saved.status, reason: input.reason },
       ipAddress: input.ipAddress,
       userAgent: input.userAgent,
     });
 
     return saved;
+  }
+
+  async bulkResolveFlags(
+    ids: string[],
+    input: ResolveContentFlagInput,
+  ): Promise<{ resolved: ContentFlag[]; failed: { id: string; reason: string }[] }> {
+    const resolved: ContentFlag[] = [];
+    const failed: { id: string; reason: string }[] = [];
+
+    for (const id of ids) {
+      try {
+        const flag = await this.resolveFlag(id, input);
+        resolved.push(flag);
+      } catch (error) {
+        failed.push({
+          id,
+          reason: error instanceof Error ? error.message : 'Unknown error',
+        });
+      }
+    }
+
+    return { resolved, failed };
   }
 }

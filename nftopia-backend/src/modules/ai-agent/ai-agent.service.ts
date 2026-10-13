@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   ForbiddenException,
   Injectable,
   InternalServerErrorException,
@@ -12,6 +13,8 @@ import type {
   BetaMessage,
   BetaMessageParam,
 } from '@anthropic-ai/sdk/resources/beta/messages';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository } from 'typeorm';
 import { NftService } from '../nft/nft.service';
 import { ListingService } from '../listing/listing.service';
 import { CollectionService } from '../collection/collection.service';
@@ -19,8 +22,11 @@ import { OrderService } from '../order/order.service';
 import { AuctionService } from '../auction/auction.service';
 import { resolveToolSet } from './tools/tool-set.registry';
 import type { ToolSetName } from './tools/tool-set.types';
+import type { DraftListingResult } from './tools/creator-copilot.tools';
 import { AiUsageService } from './ai-usage.service';
 import { ChatSessionService } from './chat-session.service';
+import { AiToolCallLog } from './entities/ai-tool-call-log.entity';
+import { PromptInjectionService } from './prompt-injection.service';
 
 const SYSTEM_PROMPT = `You are the NFTopia marketplace assistant. You help users find NFTs, \
 listings, and collections on the NFTopia Stellar marketplace, answer questions about the \
@@ -30,6 +36,14 @@ always call get_auction_bids when a question depends on actual bid activity (e.g
 highest bid or whether anyone has bid), rather than assuming it. Only state facts returned by \
 your tools — never invent prices, ownership, availability, order status, or bid amounts. If a \
 search returns no results, say so plainly instead of guessing. Keep answers concise.`;
+
+const CREATOR_COPILOT_SYSTEM_PROMPT = `You are the NFTopia creator co-pilot. Given an NFT's \
+metadata (and, when available, its collection's floor price), draft a marketplace listing for \
+it: a concise, compelling title, a short description, and a suggested price with your \
+reasoning. Ground the price in the data given — the collection floor price or the NFT's own \
+last sale price when present — rather than inventing a number. You MUST call draft_listing \
+exactly once with your suggestion; do not reply with plain text. This is a draft only: the \
+creator will review and can edit anything before it is ever published.`;
 
 @Injectable()
 export class AiAgentService {
@@ -44,7 +58,43 @@ export class AiAgentService {
     private readonly auctionService: AuctionService,
     private readonly aiUsageService: AiUsageService,
     private readonly chatSessionService: ChatSessionService,
+    @InjectRepository(AiToolCallLog)
+    private readonly toolCallLogRepo: Repository<AiToolCallLog>,
+    private readonly promptInjectionService: PromptInjectionService,
   ) {}
+
+  private getToolLogger(userId: string, sessionId: string) {
+    return (
+      toolName: string,
+      args: Record<string, unknown>,
+      resultSummary: string,
+      durationMs: number,
+    ) => {
+      const redactedArgs = { ...args };
+      // Redaction policy: Redact free-text user inputs which might contain PII or abuse
+      const sensitiveFields = ['search', 'reason', 'message', 'content'];
+      for (const field of sensitiveFields) {
+        if (typeof redactedArgs[field] === 'string') {
+          redactedArgs[field] = '[REDACTED]';
+        }
+      }
+
+      this.toolCallLogRepo
+        .save({
+          userId,
+          sessionId,
+          toolName,
+          args: redactedArgs,
+          resultSummary,
+          durationMs,
+        })
+        .catch((err) => {
+          this.logger.error(
+            `Failed to save tool call log: ${(err as Error).message}`,
+          );
+        });
+    };
+  }
 
   async chat(
     userId: string,
@@ -53,6 +103,21 @@ export class AiAgentService {
     sessionId?: string,
   ): Promise<{ reply: string; sessionId: string }> {
     await this.aiUsageService.assertWithinCap(userId);
+
+    // Screen the message for prompt-injection / jailbreak attempts before
+    // touching the session or forwarding anything to the model.  We use a
+    // placeholder session id in the log if no session exists yet, because
+    // the real id is only known after loadOrCreateSession.
+    const screening = this.promptInjectionService.screen(message);
+    if (screening.flagged) {
+      this.promptInjectionService.logFlagged(
+        userId,
+        sessionId ?? 'pre-session',
+        screening.category!,
+        message,
+      );
+      throw new BadRequestException(screening.reason);
+    }
 
     // History always comes from the database — never from client input —
     // and ownership of an existing session is enforced here too (#487).
@@ -66,6 +131,7 @@ export class AiAgentService {
       orderService: this.orderService,
       auctionService: this.auctionService,
       userId,
+      toolLogger: this.getToolLogger(userId, session.id),
     });
 
     const messages: BetaMessageParam[] = [
@@ -139,6 +205,19 @@ export class AiAgentService {
         try {
           await this.aiUsageService.assertWithinCap(userId);
 
+          // Screen for injection/jailbreak before opening the session or
+          // the streaming connection to the model.
+          const screening = this.promptInjectionService.screen(message);
+          if (screening.flagged) {
+            this.promptInjectionService.logFlagged(
+              userId,
+              sessionId ?? 'pre-session',
+              screening.category!,
+              message,
+            );
+            throw new BadRequestException(screening.reason);
+          }
+
           const { session, history } =
             await this.chatSessionService.loadOrCreateSession(
               userId,
@@ -152,6 +231,7 @@ export class AiAgentService {
             orderService: this.orderService,
             auctionService: this.auctionService,
             userId,
+            toolLogger: this.getToolLogger(userId, session.id),
           });
 
           const messages: BetaMessageParam[] = [
@@ -248,6 +328,98 @@ export class AiAgentService {
     });
   }
 
+  /**
+   * Drafts a marketplace listing (title/description/suggested price) for
+   * an NFT the caller owns (#528). Ownership is checked here, *before* the
+   * Anthropic API is ever called, so an unauthorized attempt costs nothing
+   * and never reaches the model — the 'creator-copilot' tool set's
+   * draft_listing tool then defensively re-checks the model's answer is
+   * about the same NFT (see creator-copilot.tools.ts).
+   *
+   * Never persists a listing: the result is handed back for the creator to
+   * review and edit. Publishing is a separate, explicit action via the
+   * existing listing-creation endpoint.
+   */
+  async draftListing(
+    userId: string,
+    nftId: string,
+  ): Promise<DraftListingResult> {
+    await this.aiUsageService.assertWithinCap(userId);
+
+    const nft = await this.nftService.findById(nftId);
+    if (nft.ownerId !== userId) {
+      throw new ForbiddenException(
+        'You can only draft a listing for an NFT you own.',
+      );
+    }
+
+    let floorPrice: string | undefined;
+    if (nft.collectionId) {
+      try {
+        const stats = await this.collectionService.getStats(nft.collectionId);
+        floorPrice = stats.floorPrice;
+      } catch {
+        // Best-effort context for the model — a stats lookup failure
+        // should not block drafting, just leave the price ungrounded by
+        // a floor price.
+      }
+    }
+
+    const tools = resolveToolSet('creator-copilot', {
+      expectedNftId: nftId,
+      toolLogger: this.getToolLogger(userId, `copilot:${nftId}`),
+    });
+    const draftListingTool = tools.find((t) => t.name === 'draft_listing');
+    if (!draftListingTool) {
+      throw new InternalServerErrorException(
+        'creator-copilot tool set is misconfigured',
+      );
+    }
+
+    const nftContext = {
+      id: nft.id,
+      name: nft.name,
+      description: nft.description ?? null,
+      lastPrice: nft.lastPrice ?? null,
+      collectionFloorPrice: floorPrice ?? null,
+    };
+    const prompt = `Draft a marketplace listing for this NFT:\n${JSON.stringify(nftContext, null, 2)}`;
+
+    try {
+      const response = await this.client.beta.messages.create({
+        model: 'claude-opus-5',
+        max_tokens: 2000,
+        system: CREATOR_COPILOT_SYSTEM_PROMPT,
+        tools,
+        tool_choice: { type: 'tool', name: 'draft_listing' },
+        messages: [{ role: 'user', content: prompt }],
+      });
+
+      void this.aiUsageService.recordUsage(
+        userId,
+        response.model,
+        response.usage.input_tokens,
+        response.usage.output_tokens,
+      );
+
+      const toolUseBlock = response.content.find(
+        (block): block is Extract<typeof block, { type: 'tool_use' }> =>
+          block.type === 'tool_use' && block.name === 'draft_listing',
+      );
+      if (!toolUseBlock) {
+        throw new InternalServerErrorException(
+          'AI assistant did not return a draft listing',
+        );
+      }
+
+      const parsedInput: unknown = draftListingTool.parse(toolUseBlock.input);
+      const resultJson = await draftListingTool.run(parsedInput);
+      return JSON.parse(resultJson as string) as DraftListingResult;
+    } catch (error) {
+      throw this.mapAnthropicError(error);
+    }
+  }
+
   private mapAnthropicError(error: unknown): Error {
     if (error instanceof ForbiddenException) {
       // Cap-exceeded, already a clear typed/user-facing error — pass through.
@@ -273,5 +445,31 @@ export class AiAgentService {
     }
     this.logger.error('Unexpected error in AI assistant', error as Error);
     return new InternalServerErrorException('AI assistant failed to respond');
+  }
+
+  async getToolLogs(query: {
+    userId?: string;
+    sessionId?: string;
+    toolName?: string;
+    page?: number;
+    limit?: number;
+  }): Promise<{ data: AiToolCallLog[]; total: number }> {
+    const qb = this.toolCallLogRepo.createQueryBuilder('log');
+    if (query.userId)
+      qb.andWhere('log.userId = :userId', { userId: query.userId });
+    if (query.sessionId)
+      qb.andWhere('log.sessionId = :sessionId', { sessionId: query.sessionId });
+    if (query.toolName)
+      qb.andWhere('log.toolName = :toolName', { toolName: query.toolName });
+
+    const page = query.page ?? 1;
+    const limit = query.limit ?? 50;
+
+    qb.orderBy('log.createdAt', 'DESC');
+    qb.skip((page - 1) * limit);
+    qb.take(limit);
+
+    const [data, total] = await qb.getManyAndCount();
+    return { data, total };
   }
 }

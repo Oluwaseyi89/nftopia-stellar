@@ -11,6 +11,7 @@ import { useAuthStore } from '@/stores/authStore';
 import { useTrendingCollections } from '@/hooks/useTrendingCollections';
 import { useNewListings } from '@/hooks/useNewListings';
 import BalanceDisplay from '@/components/wallet/BalanceDisplay';
+import { useXlmPrice } from '@/src/hooks/useXlmPrice';
 import CategorySelector from '@/components/ui/CategorySelector';
 import TrendingCarousel from '@/components/ui/TrendingCarousel';
 import NewDropsSection from '@/components/ui/NewDropsSection';
@@ -43,6 +44,7 @@ function HomeContent() {
   } = useWalletConnect();
   const network = useWalletStore((s) => s.network);
   const { track } = useAnalytics();
+  const xlmPrice = useXlmPrice();
 
   const {
     collections: trendingCollections,
@@ -204,6 +206,9 @@ function HomeContent() {
           error={error}
           onRefresh={handleRefresh}
           publicKey={activePublicKey ?? undefined}
+          fiatPrice={xlmPrice.price}
+          fiatCurrency={xlmPrice.currency}
+          fiatStale={xlmPrice.stale}
         />
 
         <View style={styles.section}>
@@ -258,6 +263,33 @@ function HomeContent() {
           </TouchableOpacity>
           <TouchableOpacity
             style={styles.actionCard}
+            onPress={() => navigation.navigate('Auctions')}
+            accessibilityRole="button"
+            accessibilityLabel="Auctions"
+          >
+            <Text style={styles.actionIcon} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">🔨</Text>
+            <Text style={styles.actionLabel}>Auctions</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.actionCard}
+            onPress={() => navigation.navigate('Collections')}
+            accessibilityRole="button"
+            accessibilityLabel="Collections"
+          >
+            <Text style={styles.actionIcon} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">📚</Text>
+            <Text style={styles.actionLabel}>Collections</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.actionCard}
+            onPress={() => navigation.navigate('Assistant')}
+            accessibilityRole="button"
+            accessibilityLabel="AI Assistant"
+          >
+            <Text style={styles.actionIcon} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">🤖</Text>
+            <Text style={styles.actionLabel}>Assistant</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.actionCard}
             onPress={() => navigation.navigate('Send')}
             accessibilityRole="button"
             accessibilityLabel={t('home.actions.send')}
@@ -267,9 +299,9 @@ function HomeContent() {
           </TouchableOpacity>
           <TouchableOpacity
             style={styles.actionCard}
+            onPress={() => navigation.navigate('Receive')}
             accessibilityRole="button"
             accessibilityLabel={t('home.actions.receive')}
-            accessibilityHint="Coming soon"
           >
             <Text style={styles.actionIcon} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">📥</Text>
             <Text style={styles.actionLabel}>{t('home.actions.receive')}</Text>

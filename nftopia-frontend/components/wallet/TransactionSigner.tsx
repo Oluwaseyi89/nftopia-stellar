@@ -6,6 +6,7 @@ import { useStellarTransaction } from "./hooks/useStellarTransaction";
 import { useWalletStore } from "@/stores/walletStore";
 import { getExplorerUrl } from "@/lib/stellar/network";
 import { Button } from "@/components/ui/button";
+import { TransactionFeePreview } from "./TransactionFeePreview";
 
 export type TransactionType = "mint" | "list" | "bid" | "buy" | "cancel";
 
@@ -36,7 +37,7 @@ export function TransactionSigner({
 }: TransactionSignerProps) {
   const { provider, network, address } = useWalletStore();
   const { signing, submitting, txHash, error, signAndSubmit, clearState } =
-    useStellarTransaction(provider, network);
+    useStellarTransaction(provider, network, type);
 
   const [done, setDone] = useState(false);
 
@@ -109,6 +110,8 @@ export function TransactionSigner({
                   <span className="text-gray-300 capitalize">{provider || "—"}</span>
                 </div>
               </div>
+
+              <TransactionFeePreview network={network} />
 
               {isLoading && (
                 <div className="flex items-center justify-center gap-3 py-2" aria-live="polite">
